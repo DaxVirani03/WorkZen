@@ -1,16 +1,25 @@
+/**
+ * WorkZen HRMS - Signup Page
+ * Single-file registration page
+ * Allows only: Employee, HR Officer, Payroll Officer
+ * Admin cannot sign up (by invite only)
+ * Follows Excalidraw HRMS workflow
+ */
+
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Lock, Mail, User, Briefcase, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, User, Briefcase, UserPlus, AlertCircle } from 'lucide-react';
 
 function Signup() {
   const navigate = useNavigate();
+  // Form state - role defaults to Employee
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'Employee',
+    role: 'Employee', // Default role
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -124,11 +133,16 @@ function Signup() {
           {/* Header */}
           <div className="mb-8 text-center">
             <h2 className="text-3xl font-bold text-white mb-2">
-              Create Your WorkZen Account
+              Create your WorkZen account
             </h2>
             <p className="text-gray-400 text-sm">
               Join us and streamline your HR management
             </p>
+            {/* Admin note */}
+            <div className="mt-4 flex items-center justify-center gap-2 text-xs text-gray-500">
+              <AlertCircle className="w-4 h-4" />
+              <span>Admin accounts are by invite only</span>
+            </div>
           </div>
 
           {/* Error Message */}
@@ -209,8 +223,8 @@ function Signup() {
                   className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all appearance-none cursor-pointer"
                 >
                   <option value="Employee">Employee</option>
-                  <option value="HR">HR</option>
-                  <option value="Admin">Admin</option>
+                  <option value="HR Officer">HR Officer</option>
+                  <option value="Payroll Officer">Payroll Officer</option>
                 </select>
                 <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
                   <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

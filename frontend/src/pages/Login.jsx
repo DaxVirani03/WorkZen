@@ -1,17 +1,39 @@
+/**
+ * WorkZen HRMS - Login Page
+ * Single-file login page with role-based redirection
+ * Redirects to appropriate dashboard based on user role:
+ * - Employee → /dashboard/employee
+ * - HR Officer → /dashboard/hr
+ * - Payroll Officer → /dashboard/payroll
+ * - Admin → /dashboard/employee (fallback)
+ * Follows Excalidraw HRMS workflow
+ */
+
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Lock, Mail, LogIn } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, LogIn, CheckCircle } from 'lucide-react';
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Check for success message from signup redirect
+  useState(() => {
+    if (location.state?.message) {
+      setSuccess(location.state.message);
+      // Clear message after 5 seconds
+      setTimeout(() => setSuccess(''), 5000);
+    }
+  }, [location]);
 
   const handleChange = (e) => {
     setFormData({
@@ -39,12 +61,31 @@ function Login() {
 
       if (response.ok) {
         // Save token and user info to localStorage
-        localStorage.setItem('authToken', data.token);
-        localStorage.setItem('userRole', data.role);
-        localStorage.setItem('userEmail', formData.email);
+        localStorage.setItem('workzen_token', data.token);
+        localStorage.setItem('workzen_role', data.user.role);
+        localStorage.setItem('workzen_user', JSON.stringify(data.user));
         
-        // Redirect to dashboard
-        navigate('/dashboard');
+        console.log('✅ Login successful, redirecting to role dashboard:', data.user.role);
+        
+        // Role-based redirection following Excalidraw workflow
+        switch (data.user.role) {
+          case 'Employee':
+            navigate('/dashboard/employee');
+            break;
+          case 'HR Officer':
+            navigate('/dashboard/hr');
+            break;
+          case 'Payroll Officer':
+            navigate('/dashboard/payroll');
+            break;
+          case 'Admin':
+            // Admin can access any dashboard, default to employee view
+            navigate('/dashboard/employee');
+            break;
+          default:
+            // Fallback
+            navigate('/dashboard/employee');
+        }
       } else {
         setError(data.message || 'Login failed. Please try again.');
       }
@@ -95,6 +136,18 @@ function Login() {
               Login to manage attendance, payroll, and more.
             </p>
           </div>
+
+          {/* Success Message */}
+          {success && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 p-4 bg-green-500/10 border border-green-500/50 rounded-lg text-green-400 text-sm flex items-center gap-2"
+            >
+              <CheckCircle className="w-5 h-5" />
+              {success}
+            </motion.div>
+          )}
 
           {/* Error Message */}
           {error && (
@@ -164,9 +217,13 @@ function Login() {
                   )}
                 </button>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Demo credentials: admin@workzen.com / admin123
-              </p>
+              <div className="text-xs text-gray-500 mt-2 space-y-1">
+                <p className="font-semibold text-gray-400">Test credentials:</p>
+                <p>• Employee: employee1@workzen.com / emp123</p>
+                <p>• HR Officer: hr1@workzen.com / hr123</p>
+                <p>• Payroll Officer: payroll1@workzen.com / pay123</p>
+                <p>• Admin: admin@workzen.com / admin123</p>
+              </div>
             </motion.div>
 
             {/* Login Button */}

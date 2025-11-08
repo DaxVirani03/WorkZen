@@ -90,6 +90,59 @@ npm run build
 npm run preview
 ```
 
+## 🔐 Authentication
+
+WorkZen HRMS includes role-based authentication with three distinct dashboards:
+
+### Signup (`/signup`)
+- **Allowed Roles**: Employee, HR Officer, Payroll Officer
+- **Admin Role**: Cannot sign up via UI (seeded by system only)
+- After successful signup, user is redirected to login page
+
+### Login (`/login`)
+- Authenticates via `POST /api/auth/login`
+- Stores `workzen_token`, `workzen_role`, `workzen_user` in localStorage
+- **Role-Based Redirect**:
+  - Employee → `/dashboard/employee`
+  - HR Officer → `/dashboard/hr`
+  - Payroll Officer → `/dashboard/payroll`
+  - Admin → `/dashboard/employee` (fallback)
+
+### Role-Specific Dashboards
+
+**Employee Dashboard** (`/dashboard/employee`):
+- Punch In/Out attendance
+- Monthly attendance chart (Chart.js)
+- Leave requests and balance
+- Download payslips
+
+**HR Officer Dashboard** (`/dashboard/hr`):
+- Approve/reject leave requests
+- Review attendance corrections
+- Employee directory management
+- Leave allocation
+
+**Payroll Officer Dashboard** (`/dashboard/payroll`):
+- Run monthly payroll
+- View locked payruns
+- Generate payslips in bulk
+- Monthly payroll cost analytics
+- Approved leaves summary
+
+### Test Credentials
+```
+Employee:        employee1@workzen.com / emp123
+HR Officer:      hr1@workzen.com / hr123
+Payroll Officer: payroll1@workzen.com / pay123
+Admin:           admin@workzen.com / admin123
+```
+
+### Protected Routes
+All dashboard routes are protected by the `PrivateRoute` component in `App.jsx`, which:
+- Checks for valid authentication token
+- Validates user role matches allowed role
+- Redirects unauthorized users to login or appropriate dashboard
+
 ## 🎯 Features
 
 ### Dark Theme

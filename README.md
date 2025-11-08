@@ -99,39 +99,71 @@ WorkZen-HRMS/
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:5000
 
-## 🔐 Authentication (Login/Signup)
+## 🔐 Authentication & Role-Based Access
 
-WorkZen HRMS now includes a complete authentication system with Login and Sign-Up pages.
+WorkZen HRMS includes a comprehensive authentication system with role-based dashboards following the Excalidraw HRMS workflow.
 
-### Features
-- **Login Page** (`/login`): Secure login with email and password
-- **Sign-Up Page** (`/signup`): User registration with name, email, password, and role selection
-- **Dashboard** (`/dashboard`): Protected dashboard accessible only after login
-- **Logout**: Clear authentication and redirect to login
+### Roles & Dashboards
 
-### Usage
+**Three User Roles with Dedicated Dashboards:**
+1. **Employee** → `/dashboard/employee`
+   - Punch In/Out attendance tracking
+   - View monthly attendance chart
+   - Apply for leave and view leave balance
+   - Download payslips
 
-1. **Sign Up**: Navigate to `/signup` to create a new account
-   - Enter your full name
-   - Provide a valid email address
-   - Choose your role (Employee, HR, or Admin)
-   - Create a password (minimum 6 characters)
-   - Confirm your password
+2. **HR Officer** → `/dashboard/hr`
+   - Approve/reject leave requests
+   - Review attendance corrections
+   - Manage employee directory
+   - Allocate leave balances
 
-2. **Login**: Navigate to `/login` to access your account
-   - Demo credentials: `admin@workzen.com` / `admin123`
-   - Enter your email and password
-   - Click "Login to Dashboard" to authenticate
+3. **Payroll Officer** → `/dashboard/payroll`
+   - Process monthly payroll (Run Payroll)
+   - View locked payruns history
+   - Generate payslips in bulk
+   - Monitor payroll costs with analytics
+   - Track approved leaves affecting payroll
 
-3. **Dashboard Access**: After successful login, you'll be redirected to `/dashboard`
-   - View your profile information
-   - Access quick stats and actions
-   - Logout when done
+4. **Admin** → (Seeded/System-only, not available for signup)
+
+### Sign Up & Login
+
+**Sign Up** (`/signup`):
+- Allowed roles: **Employee**, **HR Officer**, **Payroll Officer** only
+- Admin accounts are created by the system (cannot sign up via UI)
+- Required fields: Name, Email, Password, Role
+- After signup → redirected to login page
+
+**Login** (`/login`):
+- Enter email and password
+- System automatically redirects to role-specific dashboard
+- localStorage stores: `workzen_token`, `workzen_role`, `workzen_user`
+
+**Test Credentials:**
+```
+Employee:        employee1@workzen.com / emp123
+HR Officer:      hr1@workzen.com / hr123
+Payroll Officer: payroll1@workzen.com / pay123
+Admin:           admin@workzen.com / admin123
+```
+
+### Authentication Flow
+
+1. **Signup** → Only 3 roles allowed (Employee, HR Officer, Payroll Officer)
+2. **Login** → Returns token + user object with role
+3. **Role-Based Redirect:**
+   - Employee → `/dashboard/employee`
+   - HR Officer → `/dashboard/hr`
+   - Payroll Officer → `/dashboard/payroll`
+   - Admin → `/dashboard/employee` (fallback)
+4. **Protected Routes** → PrivateRoute component checks token and role
+5. **Logout** → Clears localStorage and redirects to `/login`
 
 ### API Endpoints
 
 **Authentication Routes:**
-- `POST /api/auth/register` - Register a new user
+- `POST /api/auth/register` - Register new user (roles: Employee, HR Officer, Payroll Officer)
   ```json
   {
     "name": "John Doe",
@@ -140,14 +172,16 @@ WorkZen HRMS now includes a complete authentication system with Login and Sign-U
     "role": "Employee"
   }
   ```
+  ⚠️ Returns error if role is "Admin" or invalid
 
 - `POST /api/auth/login` - Authenticate and get token
   ```json
   {
-    "email": "admin@workzen.com",
-    "password": "admin123"
+    "email": "employee1@workzen.com",
+    "password": "emp123"
   }
   ```
+  Returns: `{ token, user: { id, name, email, role } }`
 
 - `GET /api/auth/users` - Get all registered users (debugging)
 

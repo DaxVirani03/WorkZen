@@ -1,9 +1,11 @@
 /**
  * Authentication Controller
  * Handles user registration and login with mock authentication
+ * Follows Excalidraw HRMS workflow for role-based access
  */
 
 // Mock user database (in-memory storage for demo purposes)
+// TODO: Replace with MongoDB/Mongoose models and bcrypt password hashing
 const users = [
   {
     id: 1,
@@ -11,12 +13,36 @@ const users = [
     email: 'admin@workzen.com',
     password: 'admin123', // In production, this should be hashed
     role: 'Admin'
+  },
+  // Seeded test users for each role
+  {
+    id: 2,
+    name: 'John Employee',
+    email: 'employee1@workzen.com',
+    password: 'emp123',
+    role: 'Employee'
+  },
+  {
+    id: 3,
+    name: 'Sarah HR',
+    email: 'hr1@workzen.com',
+    password: 'hr123',
+    role: 'HR Officer'
+  },
+  {
+    id: 4,
+    name: 'Mike Payroll',
+    email: 'payroll1@workzen.com',
+    password: 'pay123',
+    role: 'Payroll Officer'
   }
 ];
 
 /**
  * Register a new user
  * @route POST /api/auth/register
+ * Only allows: Employee, HR Officer, Payroll Officer
+ * Admin cannot sign up via this endpoint
  */
 exports.register = (req, res) => {
   try {
@@ -29,6 +55,14 @@ exports.register = (req, res) => {
       });
     }
 
+    // CRITICAL: Role validation - Admin cannot sign up
+    const allowedRoles = ['Employee', 'HR Officer', 'Payroll Officer'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ 
+        message: 'Invalid role. Only Employee, HR Officer, and Payroll Officer can sign up. Admin accounts are by invite only.' 
+      });
+    }
+
     // Check if user already exists
     const existingUser = users.find(user => user.email === email);
     if (existingUser) {
@@ -37,12 +71,28 @@ exports.register = (req, res) => {
       });
     }
 
+    // Email validation (basic)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ 
+        message: 'Please enter a valid email address' 
+      });
+    }
+
+    // Password validation
+    if (password.length < 6) {
+      return res.status(400).json({ 
+        message: 'Password must be at least 6 characters long' 
+      });
+    }
+
     // Create new user
+    // TODO: Hash password with bcrypt before storing
     const newUser = {
-      id: users.length + 1,
+      id: Date.now().toString(),
       name,
       email,
-      password, // In production, hash this password
+      password, // In production, hash this password with bcrypt
       role
     };
 
@@ -72,6 +122,7 @@ exports.register = (req, res) => {
 /**
  * Login user
  * @route POST /api/auth/login
+ * Returns token + user data with role for frontend redirection
  */
 exports.login = (req, res) => {
   try {
@@ -93,7 +144,8 @@ exports.login = (req, res) => {
       });
     }
 
-    // Check password (in production, compare hashed passwords)
+    // Check password
+    // TODO: In production, use bcrypt.compare(password, user.password)
     if (user.password !== password) {
       return res.status(401).json({ 
         message: 'Invalid credentials' 
@@ -102,11 +154,14 @@ exports.login = (req, res) => {
 
     console.log(`✅ User logged in: ${email} (${user.role})`);
 
-    // Return success response with mock token
+    // Generate mock JWT token
+    // TODO: Replace with real JWT: jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' })
+    const token = 'mock-jwt-' + user.id + '-' + Date.now();
+
+    // Return success response with token and full user data
     return res.json({ 
       message: 'Login successful',
-      token: 'mock-jwt-token-' + Date.now(), // Mock JWT token
-      role: user.role,
+      token,
       user: {
         id: user.id,
         name: user.name,
