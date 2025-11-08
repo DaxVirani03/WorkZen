@@ -145,8 +145,7 @@ export default function LandingPage() {
             className="flex flex-col sm:flex-row gap-4 justify-center mb-16"
           >
             <a 
-              href="https://github.com/DaxVirani03/WorkZen"
-              target="_blank"
+              href="/login"
               rel="noopener noreferrer"
               className="px-8 py-4 bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors font-semibold text-lg flex items-center justify-center"
             >
