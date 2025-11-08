@@ -1,42 +1,21 @@
 /**
  * Authentication Controller
- * Handles user registration and login with mock authentication
+ * Handles user registration and login with MongoDB integration
  * Follows Excalidraw HRMS workflow for role-based access
  */
 
-// Mock user database (in-memory storage for demo purposes)
-// TODO: Replace with MongoDB/Mongoose models and bcrypt password hashing
-const users = [
-  {
-    id: 1,
-    name: 'Admin User',
-    email: 'admin@workzen.com',
-    password: 'admin123', // In production, this should be hashed
-    role: 'Admin'
-  },
-  // Seeded test users for each role
-  {
-    id: 2,
-    name: 'John Employee',
-    email: 'employee1@workzen.com',
-    password: 'emp123',
-    role: 'Employee'
-  },
-  {
-    id: 3,
-    name: 'Sarah HR',
-    email: 'hr1@workzen.com',
-    password: 'hr123',
-    role: 'HR Officer'
-  },
-  {
-    id: 4,
-    name: 'Mike Payroll',
-    email: 'payroll1@workzen.com',
-    password: 'pay123',
-    role: 'Payroll Officer'
-  }
-];
+const User = require('../models/User');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+
+// Generate JWT Token
+const generateToken = (userId, role) => {
+  return jwt.sign(
+    { id: userId, role },
+    process.env.JWT_SECRET || 'workzen-secret-key-change-in-production',
+    { expiresIn: process.env.JWT_EXPIRE || '1d' }
+  );
+};
 
 /**
  * Register a new user
@@ -44,14 +23,15 @@ const users = [
  * Only allows: Employee, HR Officer, Payroll Officer
  * Admin cannot sign up via this endpoint
  */
-exports.register = (req, res) => {
+exports.register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, department, designation } = req.body;
 
     // Validation
     if (!name || !email || !password || !role) {
       return res.status(400).json({ 
-        message: 'All fields are required' 
+        success: false,
+        message: 'All fields are required (name, email, password, role)' 
       });
     }
 
@@ -59,14 +39,16 @@ exports.register = (req, res) => {
     const allowedRoles = ['Employee', 'HR Officer', 'Payroll Officer'];
     if (!allowedRoles.includes(role)) {
       return res.status(400).json({ 
+        success: false,
         message: 'Invalid role. Only Employee, HR Officer, and Payroll Officer can sign up. Admin accounts are by invite only.' 
       });
     }
 
     // Check if user already exists
-    const existingUser = users.find(user => user.email === email);
+    const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
       return res.status(409).json({ 
+        success: false,
         message: 'User with this email already exists' 
       });
     }
@@ -75,6 +57,7 @@ exports.register = (req, res) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ 
+        success: false,
         message: 'Please enter a valid email address' 
       });
     }
@@ -82,39 +65,70 @@ exports.register = (req, res) => {
     // Password validation
     if (password.length < 6) {
       return res.status(400).json({ 
+        success: false,
         message: 'Password must be at least 6 characters long' 
       });
     }
 
-    // Create new user
-    // TODO: Hash password with bcrypt before storing
-    const newUser = {
-      id: Date.now().toString(),
+    // Create new user (password will be hashed by pre-save middleware)
+    const newUser = await User.create({
       name,
-      email,
-      password, // In production, hash this password with bcrypt
-      role
-    };
+      email: email.toLowerCase(),
+      password,
+      role,
+      department,
+      designation,
+      joinDate: new Date(),
+      isVerified: false, // Require email verification in production
+      isActive: true
+    });
 
-    // Add to mock database
-    users.push(newUser);
+    // Generate token
+    const token = generateToken(newUser._id, newUser.role);
+
+    // Return user data without password
+    const userResponse = {
+      id: newUser._id,
+      name: newUser.name,
+      email: newUser.email,
+      role: newUser.role,
+      department: newUser.department,
+      designation: newUser.designation
+    };
 
     console.log(`✅ New user registered: ${email} (${role})`);
 
-    // Return success response (don't send password back)
+    // Return success response
     return res.status(201).json({ 
+      success: true,
       message: 'User registered successfully',
-      user: {
-        id: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role
-      }
+      token,
+      user: userResponse
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('❌ Registration error:', error);
+    
+    // Handle duplicate key error
+    if (error.code === 11000) {
+      return res.status(409).json({ 
+        success: false,
+        message: 'User with this email already exists' 
+      });
+    }
+    
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({ 
+        success: false,
+        message: messages.join(', ') 
+      });
+    }
+    
     return res.status(500).json({ 
-      message: 'Server error during registration' 
+      success: false,
+      message: 'Server error during registration',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -124,75 +138,201 @@ exports.register = (req, res) => {
  * @route POST /api/auth/login
  * Returns token + user data with role for frontend redirection
  */
-exports.login = (req, res) => {
+exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
     // Validation
     if (!email || !password) {
       return res.status(400).json({ 
+        success: false,
         message: 'Email and password are required' 
       });
     }
 
-    // Find user by email
-    const user = users.find(u => u.email === email);
+    // Find user by email and include password field
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
     
     if (!user) {
       return res.status(401).json({ 
-        message: 'Invalid credentials' 
+        success: false,
+        message: 'Invalid email or password' 
       });
     }
 
-    // Check password
-    // TODO: In production, use bcrypt.compare(password, user.password)
-    if (user.password !== password) {
-      return res.status(401).json({ 
-        message: 'Invalid credentials' 
+    // Check if account is locked
+    if (user.isLocked()) {
+      return res.status(423).json({ 
+        success: false,
+        message: 'Account is locked due to too many failed login attempts. Please try again later.' 
       });
     }
+
+    // Check if account is active
+    if (!user.isActive) {
+      return res.status(403).json({ 
+        success: false,
+        message: 'Your account has been deactivated. Please contact administrator.' 
+      });
+    }
+
+    // Check password using the comparePassword method
+    const isPasswordMatch = await user.comparePassword(password);
+    
+    if (!isPasswordMatch) {
+      // Increment login attempts
+      await user.incLoginAttempts();
+      
+      return res.status(401).json({ 
+        success: false,
+        message: 'Invalid email or password' 
+      });
+    }
+
+    // Reset login attempts on successful login
+    if (user.loginAttempts > 0 || user.lockUntil) {
+      await user.updateOne({
+        $set: { loginAttempts: 0 },
+        $unset: { lockUntil: 1 }
+      });
+    }
+
+    // Update last login
+    user.lastLogin = new Date();
+    await user.save();
+
+    // Generate token
+    const token = generateToken(user._id, user.role);
 
     console.log(`✅ User logged in: ${email} (${user.role})`);
 
-    // Generate mock JWT token
-    // TODO: Replace with real JWT: jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' })
-    const token = 'mock-jwt-' + user.id + '-' + Date.now();
+    // Return user data without password
+    const userResponse = {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      department: user.department,
+      designation: user.designation,
+      leaveBalance: user.leaveBalance
+    };
 
     // Return success response with token and full user data
     return res.json({ 
+      success: true,
       message: 'Login successful',
       token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      }
+      user: userResponse
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('❌ Login error:', error);
     return res.status(500).json({ 
-      message: 'Server error during login' 
+      success: false,
+      message: 'Server error during login',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
 
 /**
- * Get all registered users (for debugging)
- * @route GET /api/auth/users
+ * Get current user profile
+ * @route GET /api/auth/me
+ * Requires authentication
  */
-exports.getAllUsers = (req, res) => {
+exports.getMe = async (req, res) => {
   try {
-    // Return users without passwords
-    const safeUsers = users.map(({ password, ...user }) => user);
-    return res.json({ 
-      count: safeUsers.length,
-      users: safeUsers 
+    const user = await User.findById(req.user.id).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      user
     });
   } catch (error) {
-    console.error('Get users error:', error);
-    return res.status(500).json({ 
-      message: 'Server error' 
+    console.error('❌ Get profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
+
+/**
+ * Get all registered users (Admin only)
+ * @route GET /api/auth/users
+ */
+exports.getAllUsers = async (req, res) => {
+  try {
+    // Return users without passwords
+    const users = await User.find().select('-password');
+    
+    return res.json({ 
+      success: true,
+      count: users.length,
+      users 
+    });
+  } catch (error) {
+    console.error('❌ Get users error:', error);
+    return res.status(500).json({ 
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+/**
+ * Seed initial admin user (for development only)
+ * @route POST /api/auth/seed-admin
+ */
+exports.seedAdmin = async (req, res) => {
+  try {
+    // Check if admin already exists
+    const existingAdmin = await User.findOne({ email: 'admin@workzen.com' });
+    
+    if (existingAdmin) {
+      return res.status(400).json({
+        success: false,
+        message: 'Admin user already exists'
+      });
+    }
+
+    // Create admin user
+    const admin = await User.create({
+      name: 'Admin User',
+      email: 'admin@workzen.com',
+      password: 'admin123',
+      role: 'Admin',
+      department: 'IT',
+      designation: 'System Administrator',
+      isVerified: true,
+      isActive: true
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Admin user created successfully',
+      user: {
+        id: admin._id,
+        name: admin.name,
+        email: admin.email,
+        role: admin.role
+      }
+    });
+  } catch (error) {
+    console.error('❌ Seed admin error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+

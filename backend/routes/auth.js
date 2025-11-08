@@ -1,18 +1,18 @@
 /**
  * Authentication Routes
- * Handles user registration and login
+ * Handles user registration and login with MongoDB integration
  * Follows Excalidraw HRMS workflow for role-based authentication
  */
 
 const express = require('express');
 const router = express.Router();
-const { register, login, getAllUsers } = require('../controllers/authController');
+const { register, login, getAllUsers, getMe, seedAdmin } = require('../controllers/authController');
 
 /**
  * @route   POST /api/auth/register
  * @desc    Register a new user (Employee, HR Officer, Payroll Officer only)
  * @access  Public
- * @body    { name, email, password, role }
+ * @body    { name, email, password, role, department, designation }
  */
 router.post('/register', register);
 
@@ -26,10 +26,24 @@ router.post('/register', register);
 router.post('/login', login);
 
 /**
+ * @route   GET /api/auth/me
+ * @desc    Get current logged in user
+ * @access  Private (requires authentication)
+ */
+// router.get('/me', protect, getMe); // Uncomment when auth middleware is ready
+
+/**
  * @route   GET /api/auth/users
- * @desc    Get all registered users (for debugging/testing)
- * @access  Public (should be protected in production)
+ * @desc    Get all registered users
+ * @access  Public (should be protected as Admin-only in production)
  */
 router.get('/users', getAllUsers);
+
+/**
+ * @route   POST /api/auth/seed-admin
+ * @desc    Create initial admin user (development only)
+ * @access  Public (remove in production)
+ */
+router.post('/seed-admin', seedAdmin);
 
 module.exports = router;

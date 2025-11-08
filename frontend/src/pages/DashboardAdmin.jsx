@@ -327,8 +327,11 @@ function DashboardAdmin() {
 
           {/* Content Container */}
           <div className="relative z-10 max-w-7xl mx-auto">
-            {/* ==================== QUICK SUMMARY WIDGETS ==================== */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {/* ==================== CONDITIONAL CONTENT BASED ON ACTIVE MENU ==================== */}
+            {activeMenu === 'Employees' && (
+              <>
+                {/* ==================== QUICK SUMMARY WIDGETS ==================== */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               {/* Total Employees */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -506,9 +509,61 @@ function DashboardAdmin() {
                 </div>
               )}
             </motion.div>
+              </>
+            )}
+
+            {/* ==================== ATTENDANCE PANEL ==================== */}
+            {activeMenu === 'Attendance' && (
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold text-white">Attendance Management</h2>
+                <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
+                  <p className="text-gray-400">Attendance management interface - Coming soon</p>
+                </div>
+              </div>
+            )}
+
+            {/* ==================== TIME OFF PANEL ==================== */}
+            {activeMenu === 'Time Off' && (
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold text-white">Time Off Management</h2>
+                <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
+                  <p className="text-gray-400">Time off requests and approvals - Coming soon</p>
+                </div>
+              </div>
+            )}
+
+            {/* ==================== PAYROLL PANEL ==================== */}
+            {activeMenu === 'Payroll' && (
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold text-white">Payroll Management</h2>
+                <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
+                  <p className="text-gray-400">Payroll processing and management - Coming soon</p>
+                </div>
+              </div>
+            )}
+
+            {/* ==================== REPORTS PANEL ==================== */}
+            {activeMenu === 'Reports' && (
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold text-white">Reports & Analytics</h2>
+                <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
+                  <p className="text-gray-400">Reports and analytics dashboard - Coming soon</p>
+                </div>
+              </div>
+            )}
+
+            {/* ==================== SETTINGS PANEL ==================== */}
+            {activeMenu === 'Settings' && (
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold text-white">Settings</h2>
+                <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
+                  <p className="text-gray-400">System settings and configuration - Coming soon</p>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
       </div>
+    </div>
 
       {/* ==================== EMPLOYEE DETAILS PANEL (Right Side) ==================== */}
       <AnimatePresence>

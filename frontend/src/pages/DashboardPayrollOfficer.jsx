@@ -231,22 +231,42 @@ function DashboardPayrollOfficer() {
   // Fetch leaves
   const fetchLeaves = async () => {
     try {
-      // TODO: Replace with real API call
-      // const response = await fetch('/api/leaves', { headers: { 'Authorization': `Bearer ${localStorage.getItem('workzen_token')}` } });
-      // const data = await response.json();
+      console.log('📋 Payroll - Fetching leaves from API');
       
-      // Mock data
-      const mockLeaves = [
-        { id: 1, employeeName: 'Emily Rodriguez', type: 'Vacation', startDate: '2025-12-10', endDate: '2025-12-14', days: 5, status: 'pending', reason: 'Family vacation' },
-        { id: 2, employeeName: 'Robert Martinez', type: 'Sick Leave', startDate: '2025-12-08', endDate: '2025-12-08', days: 1, status: 'pending', reason: 'Medical appointment' },
-        { id: 3, employeeName: 'Sarah Johnson', type: 'Personal', startDate: '2025-11-20', endDate: '2025-11-21', days: 2, status: 'approved', reason: 'Personal matters' },
-        { id: 4, employeeName: 'David Park', type: 'Vacation', startDate: '2025-11-15', endDate: '2025-11-15', days: 1, status: 'rejected', reason: 'Last minute request' },
-      ];
+      const response = await fetch('/api/leaves');
       
-      setLeaves(mockLeaves);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch leaves: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('✅ Payroll - Fetched leaves:', data);
+      
+      // Handle both response formats
+      const leavesList = data.leaves || data.data || [];
+      
+      // Format leaves to match expected structure
+      const formattedLeaves = leavesList.map(l => ({
+        id: l._id || l.id,
+        employeeName: l.userId?.name || l.employee?.firstName + ' ' + l.employee?.lastName || 'Unknown',
+        email: l.email || l.userEmail || l.userId?.email || l.employee?.email,
+        type: l.type || l.leaveType,
+        startDate: l.from || l.startDate,
+        endDate: l.to || l.endDate,
+        days: l.duration || Math.ceil((new Date(l.to || l.endDate) - new Date(l.from || l.startDate)) / (1000*60*60*24)) + 1,
+        status: l.status?.toLowerCase() || 'pending',
+        reason: l.reason,
+        createdAt: l.createdAt,
+        comments: l.comments
+      }));
+      
+      setLeaves(formattedLeaves);
     } catch (error) {
-      console.error('Error fetching leaves:', error);
-      showToast('Failed to load leave requests', 'error');
+      console.error('❌ Error fetching leaves:', error);
+      showToast(error.message || 'Failed to load leave requests', 'error');
+      
+      // Fallback to empty array instead of mock data to avoid confusion
+      setLeaves([]);
     }
   };
 
@@ -257,20 +277,46 @@ function DashboardPayrollOfficer() {
     setProcessingLeave(leaveId);
     
     try {
-      // TODO: Replace with real API call
-      // await fetch(`/api/leaves/${leaveId}/approve`, { 
-      //   method: 'PUT', 
-      //   headers: { 'Authorization': `Bearer ${localStorage.getItem('workzen_token')}` } 
-      // });
+      console.log('✅ Payroll - Approving leave:', leaveId);
       
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Get current user ID from localStorage
+      let approverId = null;
+      const storedUser = localStorage.getItem('workzen_user');
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        approverId = parsedUser._id || parsedUser.id;
+      }
       
-      // Optimistic update
-      setLeaves(prev => prev.map(l => l.id === leaveId ? { ...l, status: 'approved' } : l));
+      if (!approverId) {
+        throw new Error('User not authenticated. Please log in again.');
+      }
+      
+      const res = await fetch(`/api/leaves/${leaveId}`, { 
+        method: 'PUT', 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('workzen_token')}` 
+        },
+        body: JSON.stringify({ 
+          status: 'Approved',
+          approverId: approverId
+        })
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || `Server returned ${res.status}: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      console.log('✅ Payroll - Leave approved:', data);
+      
+      // Re-fetch leaves to get updated data
+      await fetchLeaves();
       showToast('Leave request approved', 'success');
     } catch (error) {
-      console.error('Error approving leave:', error);
-      showToast('Failed to approve leave', 'error');
+      console.error('❌ Error approving leave:', error);
+      showToast(error.message || 'Failed to approve leave', 'error');
     } finally {
       setProcessingLeave(null);
     }
@@ -278,25 +324,53 @@ function DashboardPayrollOfficer() {
 
   // Reject leave
   const rejectLeave = async (leaveId) => {
-    if (!confirm('Reject this leave request?')) return;
+    const reason = prompt('Reject this leave request? Enter reason (optional):');
+    if (reason === null) return; // User cancelled
     
     setProcessingLeave(leaveId);
     
     try {
-      // TODO: Replace with real API call
-      // await fetch(`/api/leaves/${leaveId}/reject`, { 
-      //   method: 'PUT', 
-      //   headers: { 'Authorization': `Bearer ${localStorage.getItem('workzen_token')}` } 
-      // });
+      console.log('❌ Payroll - Rejecting leave:', leaveId);
       
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Get current user ID from localStorage
+      let approverId = null;
+      const storedUser = localStorage.getItem('workzen_user');
+      if (storedUser) {
+        const parsedUser = JSON.parse(storedUser);
+        approverId = parsedUser._id || parsedUser.id;
+      }
       
-      // Optimistic update
-      setLeaves(prev => prev.map(l => l.id === leaveId ? { ...l, status: 'rejected' } : l));
+      if (!approverId) {
+        throw new Error('User not authenticated. Please log in again.');
+      }
+      
+      const res = await fetch(`/api/leaves/${leaveId}`, { 
+        method: 'PUT', 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('workzen_token')}` 
+        },
+        body: JSON.stringify({ 
+          status: 'Rejected',
+          approverId: approverId,
+          comments: reason || 'No reason provided'
+        })
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || `Server returned ${res.status}: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+      console.log('❌ Payroll - Leave rejected:', data);
+      
+      // Re-fetch leaves to get updated data
+      await fetchLeaves();
       showToast('Leave request rejected', 'success');
     } catch (error) {
-      console.error('Error rejecting leave:', error);
-      showToast('Failed to reject leave', 'error');
+      console.error('❌ Error rejecting leave:', error);
+      showToast(error.message || 'Failed to reject leave', 'error');
     } finally {
       setProcessingLeave(null);
     }

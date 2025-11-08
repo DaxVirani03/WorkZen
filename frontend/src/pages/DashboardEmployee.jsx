@@ -139,11 +139,17 @@ function DashboardEmployee() {
     try {
       const res = await fetch('/api/leaves');
       const data = await res.json();
-      // filter by user
-      const my = (data.leaves || []).filter(l => l.email === user?.email || l.userEmail === user?.email);
+      console.log('📋 Fetched leaves:', data);
+      
+      // filter by user email
+      const my = (data.leaves || data.data || []).filter(l => 
+        l.email === user?.email || 
+        l.userEmail === user?.email ||
+        l.userId?.email === user?.email
+      );
       setLeaves(my);
     } catch (err) {
-      console.error(err);
+      console.error('❌ Fetch leaves error:', err);
       setLeaves([]);
     }
   }
@@ -161,29 +167,76 @@ function DashboardEmployee() {
     setChartData({ labels, datasets: [{ label: 'Present (1/0)', data, borderColor: '#005eb8', backgroundColor: 'rgba(0,94,184,0.1)', tension: 0.3 }] });
   }
 
-  // Submit leave (optimistic)
+  // Submit leave (with proper field names)
   async function submitLeave(e) {
     e.preventDefault();
     if (!leaveForm.from || !leaveForm.to || !leaveForm.reason) {
       alert('Please fill from/to/reason');
       return;
     }
-    const optimistic = { id: Date.now(), type: leaveForm.type, from: leaveForm.from, to: leaveForm.to, reason: leaveForm.reason, status: 'Pending', email: user?.email, createdAt: new Date().toISOString() };
+    
+    // Validate dates
+    const fromDate = new Date(leaveForm.from);
+    const toDate = new Date(leaveForm.to);
+    if (toDate < fromDate) {
+      alert('End date must be after or equal to start date');
+      return;
+    }
+    
+    const optimistic = { 
+      id: Date.now(), 
+      type: leaveForm.type, 
+      from: leaveForm.from, 
+      to: leaveForm.to, 
+      reason: leaveForm.reason, 
+      status: 'Pending', 
+      email: user?.email,
+      userEmail: user?.email,
+      createdAt: new Date().toISOString() 
+    };
+    
     setLeaves(prev => [optimistic, ...prev]);
     setSubmittingLeave(true);
+    
     try {
-      const res = await fetch('/api/leaves', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(optimistic) });
+      console.log('📤 Submitting leave request:', optimistic);
+      
+      const res = await fetch('/api/leaves', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(optimistic) 
+      });
+      
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Submit failed');
-      setLeaves(prev => prev.map(l => (l.id === optimistic.id ? { ...l, id: data.id || l.id, status: data.status || l.status } : l)));
+      console.log('📥 Leave submission response:', data);
+      
+      if (!res.ok) {
+        throw new Error(data.message || 'Submit failed');
+      }
+      
+      // Success - update with real data from server
+      setLeaves(prev => prev.map(l => 
+        l.id === optimistic.id ? { ...data.leave, id: data.id || data.leave._id } : l
+      ));
+      
+      // Re-fetch to get updated list
+      fetchLeaves();
+      
+      alert('✅ Leave request submitted successfully!');
+      setLeaveForm({ type: 'Vacation', from: '', to: '', reason: '' });
+      
     } catch (err) {
-      console.error(err);
-      setLeaves(prev => prev.map(l => (l.id === optimistic.id ? { ...l, status: 'Failed' } : l)));
-      alert('Submit failed; saved locally as Failed');
+      console.error('❌ Submit leave error:', err);
+      
+      // Mark as failed
+      setLeaves(prev => prev.map(l => 
+        l.id === optimistic.id ? { ...l, status: 'Failed' } : l
+      ));
+      
+      alert(`Submit failed: ${err.message}. Please try again.`);
+      
     } finally {
       setSubmittingLeave(false);
-      setShowTimeOffModal(false);
-      setLeaveForm({ type: 'Vacation', from: '', to: '', reason: '' });
     }
   }
 
