@@ -38,7 +38,6 @@ exports.getAttendance = async (req, res) => {
 
     // Execute query
     const attendance = await Attendance.find(filter)
-      .populate('employee', 'firstName lastName email department employeeId')
       .sort(sort)
       .limit(parseInt(limit))
       .skip(skip);
@@ -112,9 +111,7 @@ exports.markAttendance = async (req, res) => {
  */
 exports.getAttendanceById = async (req, res) => {
   try {
-    const attendance = await Attendance.findById(req.params.id)
-      .populate('employee', 'firstName lastName email department employeeId')
-      .populate('approvedBy', 'firstName lastName');
+    const attendance = await Attendance.findById(req.params.id);
 
     if (!attendance) {
       return res.status(404).json({
@@ -143,10 +140,18 @@ exports.getAttendanceById = async (req, res) => {
  */
 exports.createAttendance = async (req, res) => {
   try {
+    console.log('📥 Received attendance creation request:', {
+      employee: req.body.employee,
+      date: req.body.date,
+      checkIn: req.body.checkIn,
+      status: req.body.status
+    });
+    
     const { employee, date, checkIn, status, notes } = req.body;
 
     // Validate required fields
     if (!employee) {
+      console.error('❌ Employee ID is missing');
       return res.status(400).json({
         success: false,
         message: 'Employee ID is required'
@@ -157,40 +162,72 @@ exports.createAttendance = async (req, res) => {
     const attendanceDate = date ? new Date(date) : new Date();
     attendanceDate.setHours(0, 0, 0, 0);
 
+    console.log('🔍 Checking for existing attendance on:', attendanceDate);
+
     const existingAttendance = await Attendance.findOne({
       employee,
       date: attendanceDate
     });
 
     if (existingAttendance) {
+      console.log('⚠️ Attendance already exists:', existingAttendance);
       return res.status(400).json({
         success: false,
-        message: 'Attendance already marked for this employee on this date'
+        message: 'Attendance already marked for this employee on this date',
+        attendance: existingAttendance
       });
     }
 
+    // Prepare check-in data
+    const checkInData = {
+      time: checkIn?.time || new Date(),
+      location: checkIn?.location || null,
+      method: checkIn?.method || 'web',
+      ipAddress: checkIn?.ipAddress || req.ip || '0.0.0.0',
+      deviceInfo: checkIn?.deviceInfo || {
+        userAgent: req.headers['user-agent'] || 'Unknown',
+        platform: 'web'
+      }
+    };
+
+    // Determine status based on check-in time (9:00 AM is standard time)
+    let attendanceStatus = status || 'present';
+    if (!status) {
+      const checkInTime = new Date(checkInData.time);
+      const hour = checkInTime.getHours();
+      const minute = checkInTime.getMinutes();
+      if (hour > 9 || (hour === 9 && minute > 15)) {
+        attendanceStatus = 'late';
+      }
+    }
+
     // Create attendance record
+    console.log('💾 Creating attendance record with data:', {
+      employee,
+      date: attendanceDate,
+      checkIn: checkInData,
+      status: attendanceStatus
+    });
+    
     const attendance = await Attendance.create({
       employee,
       date: attendanceDate,
-      checkIn: {
-        time: checkIn || new Date(),
-        method: 'manual',
-        ipAddress: req.ip
-      },
-      status: status || 'present',
+      checkIn: checkInData,
+      status: attendanceStatus,
       notes
     });
 
-    const populatedAttendance = await Attendance.findById(attendance._id)
-      .populate('employee', 'firstName lastName email employeeId');
+    console.log('✅ Attendance created successfully:', attendance);
 
+    // Return without population to avoid Employee reference errors
     res.status(201).json({
       success: true,
       message: 'Attendance marked successfully',
-      attendance: populatedAttendance
+      attendance: attendance
     });
   } catch (error) {
+    console.error('❌ Create attendance error:', error);
+    console.error('❌ Error stack:', error.stack);
     res.status(500).json({
       success: false,
       message: 'Server Error',
@@ -217,29 +254,56 @@ exports.updateAttendance = async (req, res) => {
       });
     }
 
-    // Update fields
-    if (checkIn) attendance.checkIn.time = new Date(checkIn);
-    if (checkOut) {
-      attendance.checkOut = {
-        time: new Date(checkOut),
-        method: 'manual'
+    // Update check-in if provided
+    if (checkIn) {
+      attendance.checkIn = {
+        time: new Date(checkIn.time || checkIn),
+        location: checkIn.location || attendance.checkIn?.location || null,
+        method: checkIn.method || attendance.checkIn?.method || 'web',
+        ipAddress: checkIn.ipAddress || attendance.checkIn?.ipAddress || req.ip || '0.0.0.0',
+        deviceInfo: checkIn.deviceInfo || attendance.checkIn?.deviceInfo || {
+          userAgent: req.headers['user-agent'] || 'Unknown',
+          platform: 'web'
+        }
       };
     }
+
+    // Update check-out if provided
+    if (checkOut) {
+      attendance.checkOut = {
+        time: new Date(checkOut.time || checkOut),
+        location: checkOut.location || null,
+        method: checkOut.method || 'web',
+        ipAddress: checkOut.ipAddress || req.ip || '0.0.0.0',
+        deviceInfo: checkOut.deviceInfo || {
+          userAgent: req.headers['user-agent'] || 'Unknown',
+          platform: 'web'
+        }
+      };
+
+      // Calculate work hours if check-out is provided
+      if (attendance.checkIn?.time) {
+        const checkInTime = new Date(attendance.checkIn.time);
+        const checkOutTime = new Date(attendance.checkOut.time);
+        const diffMs = checkOutTime - checkInTime;
+        const diffHours = diffMs / (1000 * 60 * 60);
+        attendance.workHours = Math.max(0, diffHours);
+      }
+    }
+
     if (status) attendance.status = status;
     if (workHours !== undefined) attendance.workHours = workHours;
     if (notes) attendance.notes = notes;
 
     await attendance.save();
 
-    const updatedAttendance = await Attendance.findById(attendance._id)
-      .populate('employee', 'firstName lastName email employeeId');
-
     res.json({
       success: true,
       message: 'Attendance updated successfully',
-      attendance: updatedAttendance
+      attendance: attendance
     });
   } catch (error) {
+    console.error('Update attendance error:', error);
     res.status(500).json({
       success: false,
       message: 'Server Error',

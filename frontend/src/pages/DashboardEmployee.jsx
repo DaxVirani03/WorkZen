@@ -68,6 +68,14 @@ function DashboardEmployee() {
   const [kpis, setKpis] = useState({ present: 0, late: 0, leaves: 0, performance: 88 });
   const [chartData, setChartData] = useState(null);
 
+  // Attendance marking states
+  const [todayAttendance, setTodayAttendance] = useState(null);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [attendanceView, setAttendanceView] = useState('daily'); // 'daily' or 'monthly'
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
   // Time off
   const [showTimeOffModal, setShowTimeOffModal] = useState(false);
   const [leaveForm, setLeaveForm] = useState({ type: 'Vacation', from: '', to: '', reason: '' });
@@ -96,6 +104,7 @@ function DashboardEmployee() {
     // initial fetches
     fetchDirectory();
     fetchAttendance();
+    fetchTodayAttendance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
@@ -121,29 +130,50 @@ function DashboardEmployee() {
     }
   }
 
-  // Fetch attendance (mock-friendly)
+  // Fetch attendance from real API
   async function fetchAttendance() {
     try {
-      const res = await fetch('/api/attendance');
+      const storedUser = JSON.parse(localStorage.getItem('workzen_user') || '{}');
+      const userId = storedUser._id || storedUser.id;
+      
+      if (!userId) {
+        console.log('⚠️ No user ID for attendance fetch');
+        setAttendance([]);
+        return;
+      }
+
+      // Fetch last 30 days of attendance
+      const endDate = new Date().toISOString().split('T')[0];
+      const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
+      const res = await fetch(`/api/attendance?employeeId=${userId}&startDate=${startDate}&endDate=${endDate}`);
       const data = await res.json();
-      // Filter by user email if provided, otherwise fall back to mock
-      const my = (data.records || []).filter(r => r.userEmail === user?.email);
-      if (!my.length) {
-        const mock = Array.from({ length: 30 }).map((_, i) => ({ day: i + 1, present: Math.random() > 0.05 ? 1 : 0, timeIn: '09:00', timeOut: '18:00' }));
-        setAttendance(mock);
-        computeKpisFromAttendance(mock);
-        buildChartFromAttendance(mock);
+      
+      if (res.ok && data.attendance) {
+        const records = data.attendance.map(a => ({
+          ...a,
+          date: a.date ? new Date(a.date).toISOString().split('T')[0] : null,
+          day: new Date(a.date).getDate(),
+          present: a.status === 'present' || a.status === 'late' ? 1 : 0,
+          timeIn: a.checkIn?.time ? new Date(a.checkIn.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null,
+          timeOut: a.checkOut?.time ? new Date(a.checkOut.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null
+        }));
+        
+        setAttendance(records);
+        computeKpisFromAttendance(records);
+        buildChartFromAttendance(records);
+        console.log(`✅ Loaded ${records.length} attendance records`);
       } else {
-        setAttendance(my);
-        computeKpisFromAttendance(my);
-        buildChartFromAttendance(my);
+        console.log('ℹ️ No attendance records found, using empty data');
+        setAttendance([]);
+        computeKpisFromAttendance([]);
+        buildChartFromAttendance([]);
       }
     } catch (err) {
-      console.error(err);
-      const mock = Array.from({ length: 30 }).map((_, i) => ({ day: i + 1, present: Math.random() > 0.05 ? 1 : 0, timeIn: '09:00', timeOut: '18:00' }));
-      setAttendance(mock);
-      computeKpisFromAttendance(mock);
-      buildChartFromAttendance(mock);
+      console.error('❌ Fetch attendance error:', err);
+      setAttendance([]);
+      computeKpisFromAttendance([]);
+      buildChartFromAttendance([]);
     }
   }
 
@@ -294,6 +324,180 @@ function DashboardEmployee() {
     }
   }
 
+  // Fetch today's attendance
+  async function fetchTodayAttendance() {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('workzen_user') || '{}');
+      const userId = storedUser._id || storedUser.id;
+      
+      if (!userId) {
+        console.log('⚠️ No user ID found for attendance fetch');
+        return;
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      const res = await fetch(`/api/attendance?employeeId=${userId}&startDate=${today}&endDate=${today}`);
+      const data = await res.json();
+      
+      if (res.ok && data.attendance && data.attendance.length > 0) {
+        setTodayAttendance(data.attendance[0]);
+        console.log('✅ Today\'s attendance:', data.attendance[0]);
+      } else {
+        setTodayAttendance(null);
+        console.log('ℹ️ No attendance marked today');
+      }
+    } catch (err) {
+      console.error('❌ Fetch today attendance error:', err);
+      setTodayAttendance(null);
+    }
+  }
+
+  // Mark check-in
+  async function checkIn() {
+    setCheckingIn(true);
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('workzen_user') || '{}');
+      const userId = storedUser._id || storedUser.id;
+      
+      if (!userId) {
+        alert('User not found. Please login again.');
+        return;
+      }
+
+      // Get location if available
+      let location = null;
+      if (navigator.geolocation) {
+        try {
+          const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject);
+          });
+          location = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            address: 'Office' // You can use reverse geocoding here
+          };
+        } catch (geoErr) {
+          console.log('Geolocation not available:', geoErr);
+        }
+      }
+
+      const payload = {
+        employee: userId,
+        date: new Date().toISOString().split('T')[0],
+        checkIn: {
+          time: new Date().toISOString(),
+          location: location,
+          method: 'web',
+          ipAddress: '0.0.0.0', // You can get actual IP from backend
+          deviceInfo: {
+            userAgent: navigator.userAgent,
+            platform: navigator.platform || 'Unknown'
+          }
+        },
+        status: 'present'
+      };
+
+      console.log('📤 Sending check-in payload:', payload);
+      
+      const res = await fetch('/api/attendance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      console.log('📥 Check-in response status:', res.status);
+      
+      const data = await res.json();
+      console.log('📥 Check-in response data:', data);
+      
+      if (!res.ok) {
+        console.error('❌ Server error response:', data);
+        throw new Error(data.message || data.error || 'Check-in failed');
+      }
+
+      setTodayAttendance(data.attendance || data);
+      alert('✅ Checked in successfully!');
+      
+      // Refresh attendance list
+      fetchAttendance();
+      
+    } catch (err) {
+      console.error('❌ Check-in error:', err);
+      console.error('❌ Error details:', {
+        message: err.message,
+        stack: err.stack
+      });
+      alert(`Check-in failed: ${err.message}`);
+    } finally {
+      setCheckingIn(false);
+    }
+  }
+
+  // Mark check-out
+  async function checkOut() {
+    if (!todayAttendance || !todayAttendance._id) {
+      alert('No check-in record found for today');
+      return;
+    }
+
+    setCheckingOut(true);
+    try {
+      // Get location if available
+      let location = null;
+      if (navigator.geolocation) {
+        try {
+          const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject);
+          });
+          location = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            address: 'Office'
+          };
+        } catch (geoErr) {
+          console.log('Geolocation not available:', geoErr);
+        }
+      }
+
+      const payload = {
+        checkOut: {
+          time: new Date().toISOString(),
+          location: location,
+          method: 'web',
+          ipAddress: '0.0.0.0',
+          deviceInfo: {
+            userAgent: navigator.userAgent,
+            platform: navigator.platform || 'Unknown'
+          }
+        }
+      };
+
+      const res = await fetch(`/api/attendance/${todayAttendance._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data.message || 'Check-out failed');
+      }
+
+      setTodayAttendance(data.attendance || data);
+      alert('✅ Checked out successfully!');
+      
+      // Refresh attendance list
+      fetchAttendance();
+      
+    } catch (err) {
+      console.error('❌ Check-out error:', err);
+      alert(`Check-out failed: ${err.message}`);
+    } finally {
+      setCheckingOut(false);
+    }
+  }
+
   const handleLogout = () => {
     localStorage.removeItem('workzen_token');
     localStorage.removeItem('workzen_role');
@@ -316,7 +520,7 @@ function DashboardEmployee() {
           <p className="text-xs text-gray-400 mt-1">Employee</p>
         </div>
         <nav className="flex-1 p-4 space-y-2">
-          <motion.button onClick={() => setActiveMenu('Employees')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Employees' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Users className="w-5 h-5" /><span className="font-medium">Employees</span></motion.button>
+          <motion.button onClick={() => setActiveMenu('Dashboard')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Dashboard' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Users className="w-5 h-5" /><span className="font-medium">Dashboard</span></motion.button>
           <motion.button onClick={() => setActiveMenu('Attendance')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Attendance' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Clock className="w-5 h-5" /><span className="font-medium">Attendance</span></motion.button>
           <motion.button onClick={() => setActiveMenu('Time Off')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Time Off' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Calendar className="w-5 h-5" /><span className="font-medium">Time Off</span></motion.button>
         </nav>
@@ -331,7 +535,7 @@ function DashboardEmployee() {
               <input aria-label="Search employees" type="text" placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
             <div className="flex items-center gap-4 ml-6">
-              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setShowTimeOffModal(true)} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"><UserPlus className="w-4 h-4" />Apply</motion.button>
+              {/* <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setShowTimeOffModal(true)} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"><UserPlus className="w-4 h-4" />Apply</motion.button> */}
               <div className="relative">
                 <motion.button ref={avatarBtnRef} onClick={() => setShowProfileDropdown(p => !p)} whileHover={{ scale: 1.05 }} className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition-all">
                   <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-sm">{(user.name || user.firstName + ' ' + user.lastName || 'U').split(' ')[0][0].toUpperCase()}</div>
@@ -367,33 +571,213 @@ function DashboardEmployee() {
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><div className="flex items-center justify-between"><div><p className="text-gray-400 text-sm">Present this month</p><h3 className="text-3xl font-bold text-white mt-2">{kpis.present}</h3></div><div className="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center"><CheckCircle className="w-6 h-6 text-green-500" /></div></div></motion.div>
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><div className="flex items-center justify-between"><div><p className="text-gray-400 text-sm">Leaves taken</p><h3 className="text-3xl font-bold text-white mt-2">{kpis.leaves}</h3></div><div className="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center"><Calendar className="w-6 h-6 text-accent" /></div></div></motion.div>
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><div className="flex items-center justify-between"><div><p className="text-gray-400 text-sm">Late days</p><h3 className="text-3xl font-bold text-white mt-2">{kpis.late}</h3></div><div className="w-12 h-12 bg-yellow-500/10 rounded-lg flex items-center justify-center"><AlertCircle className="w-6 h-6 text-yellow-500" /></div></div></motion.div>
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><div className="flex items-center justify-between"><div><p className="text-gray-400 text-sm">Performance</p><h3 className="text-3xl font-bold text-white mt-2">{kpis.performance}%</h3></div><div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center"><UserIcon className="w-6 h-6 text-primary" /></div></div></motion.div>
+              {/* <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><div className="flex items-center justify-between"><div><p className="text-gray-400 text-sm">Performance</p><h3 className="text-3xl font-bold text-white mt-2">{kpis.performance}%</h3></div><div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center"><UserIcon className="w-6 h-6 text-primary" /></div></div></motion.div> */}
             </div>
 
-            <div className="mb-6 flex items-center gap-4"><button onClick={() => setActiveMenu('Employees')} className={`px-4 py-2 rounded-lg ${activeMenu === 'Employees' ? 'bg-primary text-white' : 'bg-gray-800 text-gray-300'}`}>Directory</button><button onClick={() => setActiveMenu('Attendance')} className={`px-4 py-2 rounded-lg ${activeMenu === 'Attendance' ? 'bg-primary text-white' : 'bg-gray-800 text-gray-300'}`}>Attendance</button><button onClick={() => setActiveMenu('Time Off')} className={`px-4 py-2 rounded-lg ${activeMenu === 'Time Off' ? 'bg-primary text-white' : 'bg-gray-800 text-gray-300'}`}>Time Off</button></div>
+            {/* <div className="mb-6 flex items-center gap-4"><button onClick={() => setActiveMenu('Employees')} className={`px-4 py-2 rounded-lg ${activeMenu === 'Employees' ? 'bg-primary text-white' : 'bg-gray-800 text-gray-300'}`}>Directory</button><button onClick={() => setActiveMenu('Attendance')} className={`px-4 py-2 rounded-lg ${activeMenu === 'Attendance' ? 'bg-primary text-white' : 'bg-gray-800 text-gray-300'}`}>Attendance</button><button onClick={() => setActiveMenu('Time Off')} className={`px-4 py-2 rounded-lg ${activeMenu === 'Time Off' ? 'bg-primary text-white' : 'bg-gray-800 text-gray-300'}`}>Time Off</button></div> */}
 
             <div>
               {activeMenu === 'Employees' && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-                  <h2 className="text-xl font-semibold text-white mb-6">Employee Directory</h2>
+                  {/* <h2 className="text-xl font-semibold text-white mb-6">Employee Directory</h2> */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredDirectory.map((emp, idx) => (
                       <motion.button key={emp.id || idx} whileHover={{ y: -4 }} onClick={() => { setSelectedEmployee(emp); setShowEmployeePanel(true); }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6 text-left cursor-pointer">
                         <div className="flex items-center gap-4">                        <div className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-xl">{(emp.name||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><div><h3 className="text-lg font-semibold text-white">{emp.name || 'Unknown User'}</h3><p className="text-gray-400 text-sm">{emp.role || emp.title || 'Employee'}</p><p className="text-gray-500 text-xs mt-1">{emp.email}</p></div></div>
                       </motion.button>
                     ))}
-                    {filteredDirectory.length === 0 && <div className="text-gray-400">No employees found.</div>}
+                    {/* {filteredDirectory.length === 0 && <div className="text-gray-400">No employees found.</div>} */}
                   </div>
                 </motion.div>
               )}
 
               {activeMenu === 'Attendance' && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-                  <h2 className="text-xl font-semibold text-white mb-6">My Attendance</h2>
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><div className="h-64">{chartData && <Line data={chartData} options={chartOptions} />}</div></div>
-                    <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><h3 className="text-white font-semibold mb-3">Recent Punches</h3><div className="space-y-2 text-sm text-gray-300">{attendance.slice(0,8).map((a,i)=>(<div key={i} className="flex items-center justify-between border-b border-gray-800 py-2"><div>{`Day ${a.day}`}</div><div className="text-gray-400">{a.present?`${a.timeIn} - ${a.timeOut}`:'Absent'}</div></div>))}</div></div>
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-semibold text-white">My Attendance</h2>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => setAttendanceView('daily')}
+                        className={`px-4 py-2 rounded-lg ${attendanceView === 'daily' ? 'bg-primary text-white' : 'bg-gray-800 text-gray-300'}`}
+                      >
+                        Daily
+                      </button>
+                      <button 
+                        onClick={() => setAttendanceView('monthly')}
+                        className={`px-4 py-2 rounded-lg ${attendanceView === 'monthly' ? 'bg-primary text-white' : 'bg-gray-800 text-gray-300'}`}
+                      >
+                        Monthly
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Check In/Out Panel */}
+                  <div className="bg-gradient-to-r from-primary/20 to-accent/20 backdrop-blur-xl border border-gray-800 rounded-xl p-6 mb-6">
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                      <div>
+                        <h3 className="text-white font-semibold text-lg">Today's Attendance</h3>
+                        <p className="text-gray-400 text-sm mt-1">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                        <p className="text-gray-300 text-2xl font-bold mt-2">{new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</p>
+                      </div>
+                      <div className="flex flex-col gap-3">
+                        {todayAttendance ? (
+                          <>
+                            <div className="text-center">
+                              <div className="flex items-center gap-2 text-green-400 mb-2">
+                                <CheckCircle className="w-5 h-5" />
+                                <span className="font-semibold">Checked In</span>
+                              </div>
+                              <p className="text-gray-300 text-sm">
+                                Check-in: {todayAttendance.checkIn?.time ? new Date(todayAttendance.checkIn.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                              </p>
+                              {todayAttendance.checkOut?.time && (
+                                <p className="text-gray-300 text-sm">
+                                  Check-out: {new Date(todayAttendance.checkOut.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              )}
+                              {todayAttendance.workHours && (
+                                <p className="text-primary font-semibold mt-1">
+                                  Work Hours: {todayAttendance.workHours.toFixed(2)}h
+                                </p>
+                              )}
+                            </div>
+                            {!todayAttendance.checkOut && (
+                              <button
+                                onClick={checkOut}
+                                disabled={checkingOut}
+                                className="bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors flex items-center gap-2 justify-center"
+                              >
+                                <LogOut className="w-5 h-5" />
+                                {checkingOut ? 'Checking Out...' : 'Check Out'}
+                              </button>
+                            )}
+                            {todayAttendance.checkOut && (
+                              <div className="text-green-400 text-center font-semibold">
+                                ✓ Attendance Complete
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <button
+                            onClick={checkIn}
+                            disabled={checkingIn}
+                            className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors flex items-center gap-2"
+                          >
+                            <CheckCircle className="w-5 h-5" />
+                            {checkingIn ? 'Checking In...' : 'Check In'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Attendance Logs */}
+                  {attendanceView === 'daily' ? (
+                    <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
+                      <h3 className="text-white font-semibold mb-4">Daily Attendance Log</h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead className="text-gray-400 border-b border-gray-800">
+                            <tr>
+                              <th className="pb-3">Date</th>
+                              <th className="pb-3">Check In</th>
+                              <th className="pb-3">Check Out</th>
+                              <th className="pb-3">Work Hours</th>
+                              <th className="pb-3">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="text-gray-300">
+                            {attendance.length > 0 ? (
+                              attendance.map((record, idx) => (
+                                <tr key={idx} className="border-b border-gray-800">
+                                  <td className="py-3">{record.date || `Day ${record.day}`}</td>
+                                  <td className="py-3">{record.timeIn || record.checkIn?.time ? new Date(record.checkIn?.time || record.timeIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</td>
+                                  <td className="py-3">{record.timeOut || record.checkOut?.time ? new Date(record.checkOut?.time || record.timeOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</td>
+                                  <td className="py-3">{record.workHours ? `${record.workHours.toFixed(2)}h` : 'N/A'}</td>
+                                  <td className="py-3">
+                                    <span className={`px-2 py-1 rounded text-xs ${
+                                      record.status === 'present' ? 'bg-green-500/20 text-green-400' :
+                                      record.status === 'late' ? 'bg-yellow-500/20 text-yellow-400' :
+                                      record.status === 'absent' ? 'bg-red-500/20 text-red-400' :
+                                      record.present ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                                    }`}>
+                                      {record.status || (record.present ? 'Present' : 'Absent')}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan="5" className="py-6 text-center text-gray-400">No attendance records found</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-white font-semibold">Monthly Calendar View</h3>
+                        <div className="flex gap-2">
+                          <select 
+                            value={selectedMonth} 
+                            onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                            className="bg-gray-800 text-white px-3 py-1 rounded border border-gray-700"
+                          >
+                            {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m, i) => (
+                              <option key={i} value={i}>{m}</option>
+                            ))}
+                          </select>
+                          <select 
+                            value={selectedYear} 
+                            onChange={(e) => setSelectedYear(Number(e.target.value))}
+                            className="bg-gray-800 text-white px-3 py-1 rounded border border-gray-700"
+                          >
+                            {[2023, 2024, 2025].map(y => (
+                              <option key={y} value={y}>{y}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-7 gap-2">
+                        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                          <div key={day} className="text-center text-gray-400 font-semibold text-sm py-2">{day}</div>
+                        ))}
+                        {Array.from({ length: new Date(selectedYear, selectedMonth + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
+                          const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                          const record = attendance.find(a => a.date === dateStr);
+                          return (
+                            <div 
+                              key={day} 
+                              className={`aspect-square flex items-center justify-center rounded-lg border ${
+                                record?.status === 'present' || record?.present ? 'bg-green-500/20 border-green-500/50 text-green-400' :
+                                record?.status === 'late' ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400' :
+                                record?.status === 'absent' || (record && !record.present) ? 'bg-red-500/20 border-red-500/50 text-red-400' :
+                                'bg-gray-800 border-gray-700 text-gray-400'
+                              }`}
+                            >
+                              {day}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-4 flex gap-4 text-xs text-gray-400">
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 bg-green-500/20 border border-green-500/50 rounded"></div>
+                          <span>Present</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 bg-yellow-500/20 border border-yellow-500/50 rounded"></div>
+                          <span>Late</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="w-4 h-4 bg-red-500/20 border border-red-500/50 rounded"></div>
+                          <span>Absent</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               )}
 
