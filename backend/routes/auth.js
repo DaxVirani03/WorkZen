@@ -12,7 +12,7 @@ const { register, login, getAllUsers, getMe, seedAdmin } = require('../controlle
  * @route   POST /api/auth/register
  * @desc    Register a new user (Employee, HR Officer, Payroll Officer only)
  * @access  Public
- * @body    { name, email, password, role, department, designation }
+ * @body    { firstName, lastName, email, password, role, department, designation, company }
  */
 router.post('/register', register);
 

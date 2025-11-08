@@ -15,7 +15,9 @@ function Signup() {
   const navigate = useNavigate();
   // Form state - role defaults to Employee
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
+    company: '',
     email: '',
     password: '',
     confirmPassword: '',
@@ -35,8 +37,16 @@ function Signup() {
   };
 
   const validateForm = () => {
-    if (!formData.name.trim()) {
-      setError('Name is required');
+    if (!formData.firstName.trim()) {
+      setError('First name is required');
+      return false;
+    }
+    if (!formData.lastName.trim()) {
+      setError('Last name is required');
+      return false;
+    }
+    if (!formData.company.trim()) {
+      setError('Company is required');
       return false;
     }
     if (!formData.email.trim()) {
@@ -75,7 +85,9 @@ function Signup() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: formData.name,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          company: formData.company,
           email: formData.email,
           password: formData.password,
           role: formData.role,
@@ -85,9 +97,10 @@ function Signup() {
       const data = await response.json();
 
       if (response.ok) {
-        // Redirect to login page after successful registration
+        // Show success message with user ID
+        const successMessage = `Account created successfully! Your User ID is: ${data.user.userId}. Please login.`;
         navigate('/login', { 
-          state: { message: 'Account created successfully! Please login.' }
+          state: { message: successMessage }
         });
       } else {
         setError(data.message || 'Registration failed. Please try again.');
@@ -158,25 +171,71 @@ function Signup() {
 
           {/* Signup Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Name Field */}
+            {/* First Name Field */}
             <motion.div
               whileFocus={{ scale: 1.01 }}
               className="space-y-2"
             >
-              <label htmlFor="name" className="block text-sm font-medium text-gray-300">
-                Full Name
+              <label htmlFor="firstName" className="block text-sm font-medium text-gray-300">
+                First Name
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5" />
                 <input
                   type="text"
-                  id="name"
-                  name="name"
-                  value={formData.name}
+                  id="firstName"
+                  name="firstName"
+                  value={formData.firstName}
                   onChange={handleChange}
                   required
                   className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                  placeholder="Name"
+                  placeholder="First Name"
+                />
+              </div>
+            </motion.div>
+
+            {/* Last Name Field */}
+            <motion.div
+              whileFocus={{ scale: 1.01 }}
+              className="space-y-2"
+            >
+              <label htmlFor="lastName" className="block text-sm font-medium text-gray-300">
+                Last Name
+              </label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5" />
+                <input
+                  type="text"
+                  id="lastName"
+                  name="lastName"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  required
+                  className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  placeholder="Last Name"
+                />
+              </div>
+            </motion.div>
+
+            {/* Company Field */}
+            <motion.div
+              whileFocus={{ scale: 1.01 }}
+              className="space-y-2"
+            >
+              <label htmlFor="company" className="block text-sm font-medium text-gray-300">
+                Company
+              </label>
+              <div className="relative">
+                <Briefcase className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5" />
+                <input
+                  type="text"
+                  id="company"
+                  name="company"
+                  value={formData.company}
+                  onChange={handleChange}
+                  required
+                  className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  placeholder="Company Name"
                 />
               </div>
             </motion.div>

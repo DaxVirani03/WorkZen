@@ -7,10 +7,31 @@ const bcrypt = require('bcryptjs');
  * Links to Employee model for detailed information
  */
 const userSchema = new mongoose.Schema({
-  name: {
+  // name: {
+  //   type: String,
+  //   required: [true, 'Name is required'],
+  //   trim: true
+  // },
+  firstName: {
     type: String,
-    required: [true, 'Name is required'],
+    required: [true, 'First name is required'],
     trim: true
+  },
+  lastName: {
+    type: String,
+    required: [true, 'Last name is required'],
+    trim: true
+  },
+  company: {
+    type: String,
+    required: [true, 'Company is required'],
+    trim: true,
+    uppercase: true
+  },
+  userId: {
+    type: String,
+    unique: true,
+    sparse: true // Allow null initially, but unique when set
   },
   email: {
     type: String,
