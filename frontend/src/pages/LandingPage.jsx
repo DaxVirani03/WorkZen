@@ -626,38 +626,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ==================== SECTION 14: AWARDS & FOOTER ==================== */}
+      {/* ==================== SECTION 14: FOOTER ==================== */}
       <section id="awards" className="section-padding">
         <div className="container-custom">
-          {/* Final CTA */}
-          <motion.div
-            id="demo"
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-            className="p-12 rounded-3xl bg-gradient-to-r from-primary-600 to-primary-800 text-center mb-16"
-          >
-            <h2 className="text-4xl font-bold mb-4">Ready to Transform Your HR?</h2>
-            <p className="text-xl text-white/90 mb-8">Get started with WorkZen - 100% Open Source and Self-Hosted</p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <a 
-                href="https://github.com/DaxVirani03/WorkZen"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-8 py-3 bg-white text-primary-600 hover:bg-gray-100 rounded-lg transition-colors font-semibold"
-              >
-                View on GitHub
-              </a>
-              <button 
-                onClick={() => scrollToSection('features')}
-                className="px-8 py-3 bg-transparent border-2 border-white text-white hover:bg-white hover:text-primary-600 rounded-lg transition-colors font-semibold"
-              >
-                Explore Features
-              </button>
-            </div>
-          </motion.div>
-
           {/* Footer */}
           <footer className="border-t border-gray-800 pt-12">
             <div className="grid md:grid-cols-4 gap-8 mb-12">
