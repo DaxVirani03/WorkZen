@@ -20,12 +20,14 @@ app.use((req, res, next) => {
 
 // Import routes
 const usersRoutes = require('./routes/users');
+const authRoutes = require('./routes/auth');
 const attendanceRoutes = require('./controllers/attendanceController');
 const payrollRoutes = require('./controllers/payrollController');
 const leaveRoutes = require('./controllers/leaveController');
 
 // API Routes
 app.use('/api/users', usersRoutes);
+app.use('/api/auth', authRoutes);
 
 // Direct controller routes for simplicity
 app.get('/api/attendance', attendanceRoutes.getAttendance);
@@ -53,6 +55,7 @@ app.get('/', (req, res) => {
     message: 'WorkZen HRMS API',
     version: '1.0.0',
     endpoints: {
+      auth: '/api/auth (login, register, users)',
       users: '/api/users',
       attendance: '/api/attendance',
       payroll: '/api/payroll',

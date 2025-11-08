@@ -57,11 +57,23 @@ export default function LandingPage() {
               <button onClick={() => scrollToSection('analytics')} className="hover:text-primary-500 transition-colors">Analytics</button>
               <Link to="/about" className="hover:text-primary-500 transition-colors">About</Link>
               <Link to="/contact" className="hover:text-primary-500 transition-colors">Contact</Link>
+              <Link 
+                to="/login"
+                className="hover:text-primary-500 transition-colors"
+              >
+                Login
+              </Link>
+              <Link 
+                to="/signup"
+                className="px-6 py-2 bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors font-semibold"
+              >
+                Sign Up
+              </Link>
               <a 
                 href="https://github.com/DaxVirani03/WorkZen" 
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-6 py-2 bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors font-semibold"
+                className="px-6 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors font-semibold"
               >
                 View on GitHub
               </a>
@@ -78,16 +90,23 @@ export default function LandingPage() {
 
           {/* Mobile Menu */}
           {isMenuOpen && (
-            <div className="md:hidden py-4 space-y-4">
+            <div className="md:hidden py-4 space-y-4 border-t border-gray-800">
               <button onClick={() => scrollToSection('features')} className="block w-full text-left hover:text-primary-500 transition-colors">Features</button>
               <button onClick={() => scrollToSection('analytics')} className="block w-full text-left hover:text-primary-500 transition-colors">Analytics</button>
               <Link to="/about" className="block hover:text-primary-500 transition-colors">About</Link>
               <Link to="/contact" className="block hover:text-primary-500 transition-colors">Contact</Link>
+              <Link to="/login" className="block hover:text-primary-500 transition-colors">Login</Link>
+              <Link 
+                to="/signup"
+                className="block w-full text-left px-6 py-2 bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors font-semibold"
+              >
+                Sign Up
+              </Link>
               <a 
                 href="https://github.com/DaxVirani03/WorkZen" 
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block w-full text-left px-6 py-2 bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors font-semibold"
+                className="block w-full text-left px-6 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors font-semibold"
               >
                 View on GitHub
               </a>

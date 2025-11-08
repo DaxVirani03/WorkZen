@@ -99,6 +99,65 @@ WorkZen-HRMS/
    - Frontend: http://localhost:3000
    - Backend API: http://localhost:5000
 
+## 🔐 Authentication (Login/Signup)
+
+WorkZen HRMS now includes a complete authentication system with Login and Sign-Up pages.
+
+### Features
+- **Login Page** (`/login`): Secure login with email and password
+- **Sign-Up Page** (`/signup`): User registration with name, email, password, and role selection
+- **Dashboard** (`/dashboard`): Protected dashboard accessible only after login
+- **Logout**: Clear authentication and redirect to login
+
+### Usage
+
+1. **Sign Up**: Navigate to `/signup` to create a new account
+   - Enter your full name
+   - Provide a valid email address
+   - Choose your role (Employee, HR, or Admin)
+   - Create a password (minimum 6 characters)
+   - Confirm your password
+
+2. **Login**: Navigate to `/login` to access your account
+   - Demo credentials: `admin@workzen.com` / `admin123`
+   - Enter your email and password
+   - Click "Login to Dashboard" to authenticate
+
+3. **Dashboard Access**: After successful login, you'll be redirected to `/dashboard`
+   - View your profile information
+   - Access quick stats and actions
+   - Logout when done
+
+### API Endpoints
+
+**Authentication Routes:**
+- `POST /api/auth/register` - Register a new user
+  ```json
+  {
+    "name": "John Doe",
+    "email": "john@company.com",
+    "password": "password123",
+    "role": "Employee"
+  }
+  ```
+
+- `POST /api/auth/login` - Authenticate and get token
+  ```json
+  {
+    "email": "admin@workzen.com",
+    "password": "admin123"
+  }
+  ```
+
+- `GET /api/auth/users` - Get all registered users (debugging)
+
+### Design Features
+- **Dark Theme**: Consistent with WorkZen's Zoho-inspired design
+- **Smooth Animations**: Powered by Framer Motion
+- **Responsive**: Works seamlessly on all devices
+- **Secure**: Token-based authentication with localStorage
+- **User-Friendly**: Show/hide password toggles and clear error messages
+
 ### Environment Variables
 
 Create a `.env` file in the backend directory:

@@ -49,13 +49,54 @@ npm run dev
 
 Visit: **http://localhost:3000**
 
-## 🔌 API Endpoints
+## � Quick Test Authentication
+
+### Demo Login Credentials
+```
+Email: admin@workzen.com
+Password: admin123
+```
+
+### Test the Authentication Flow
+
+1. **Sign Up** - Navigate to `/signup` and create a new account
+2. **Login** - Use the demo credentials above at `/login`
+3. **Dashboard** - After login, you'll see your dashboard at `/dashboard`
+4. **Logout** - Click the logout button to clear authentication
+
+## �🔌 API Endpoints
 
 Test the backend API:
 
 ### Health Check
 ```bash
-GET http://localhost:5001/api/health
+GET http://localhost:5000/api/health
+```
+
+### Authentication
+```bash
+# Register new user
+POST http://localhost:5000/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@company.com",
+  "password": "password123",
+  "role": "Employee"
+}
+
+# Login
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@workzen.com",
+  "password": "admin123"
+}
+
+# Get all users (debugging)
+GET http://localhost:5000/api/auth/users
 ```
 
 ### Users
