@@ -87,14 +87,26 @@ function DashboardEmployee() {
       navigate('/login');
       return;
     }
-    if (userData) setUser(JSON.parse(userData));
+    if (userData) {
+      const parsedUser = JSON.parse(userData);
+      setUser(parsedUser);
+      console.log('👤 User loaded:', parsedUser.email);
+    }
 
     // initial fetches
     fetchDirectory();
     fetchAttendance();
-    fetchLeaves();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
+
+  // Fetch leaves when user is loaded
+  useEffect(() => {
+    if (user?.email) {
+      console.log('🔄 User email available, fetching leaves for:', user.email);
+      fetchLeaves();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // Fetch directory (uses /api/users mock)
   async function fetchDirectory() {
@@ -137,17 +149,59 @@ function DashboardEmployee() {
 
   async function fetchLeaves() {
     try {
+      console.log('📋 Fetching leaves from API...');
       const res = await fetch('/api/leaves');
-      const data = await res.json();
-      console.log('📋 Fetched leaves:', data);
       
-      // filter by user email
-      const my = (data.leaves || data.data || []).filter(l => 
-        l.email === user?.email || 
-        l.userEmail === user?.email ||
-        l.userId?.email === user?.email
-      );
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+      
+      const data = await res.json();
+      console.log('✅ API Response:', data);
+      
+      // Get user email from state or localStorage
+      const userEmail = user?.email || JSON.parse(localStorage.getItem('workzen_user') || '{}').email;
+      
+      if (!userEmail) {
+        console.warn('⚠️ No user email available, cannot filter leaves');
+        setLeaves([]);
+        return;
+      }
+      
+      console.log('� Filtering leaves for user:', userEmail);
+      
+      // Filter by user email and map to include all fields
+      const allLeaves = data.leaves || data.data || [];
+      console.log('📊 Total leaves from API:', allLeaves.length);
+      
+      const my = allLeaves.filter(l => {
+        const matches = l.email === userEmail || 
+                       l.userEmail === userEmail ||
+                       l.userId?.email === userEmail;
+        if (matches) {
+          console.log('✓ Match found:', l.type, l.from, l.status);
+        }
+        return matches;
+      }).map(l => ({
+        id: l._id || l.id,
+        type: l.type,
+        from: l.from ? new Date(l.from).toISOString().split('T')[0] : '',
+        to: l.to ? new Date(l.to).toISOString().split('T')[0] : '',
+        reason: l.reason,
+        status: l.status,
+        comments: l.comments,
+        duration: l.duration,
+        createdAt: l.createdAt,
+        approvedAt: l.approvedAt,
+        rejectedAt: l.rejectedAt,
+        approverId: l.approverId
+      }));
+      
+      // Sort by creation date (newest first)
+      my.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      
       setLeaves(my);
+      console.log(`✅ Loaded ${my.length} leave requests for user ${userEmail}`);
     } catch (err) {
       console.error('❌ Fetch leaves error:', err);
       setLeaves([]);
@@ -347,7 +401,64 @@ function DashboardEmployee() {
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
                   <h2 className="text-xl font-semibold text-white mb-6">Time Off</h2>
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><h3 className="text-white font-semibold mb-4">My Requests</h3><div className="space-y-3">{leaves.map(l => (<div key={l.id} className="p-3 bg-gray-800/50 rounded-lg border border-gray-700 flex items-center justify-between"><div><div className="text-white font-medium">{l.type} • {l.from} → {l.to}</div><div className="text-gray-400 text-xs mt-1">{l.reason}</div></div><div><span className={`px-3 py-1 rounded-full text-xs ${l.status==='Pending' ? 'bg-yellow-500/20 text-yellow-400' : l.status==='Approved' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>{l.status}</span></div></div>))}{leaves.length===0 && <div className="text-gray-400">No requests yet.</div>}</div></div>
+                    <div className="lg:col-span-2 bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-white font-semibold">My Leave Requests</h3>
+                        <span className="text-xs text-gray-400">{leaves.length} total requests</span>
+                      </div>
+                      <div className="space-y-3">
+                        {leaves.map(l => (
+                          <div key={l.id} className="p-4 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="text-white font-medium flex items-center gap-2">
+                                  <span>{l.type}</span>
+                                  <span className="text-gray-500">•</span>
+                                  <span className="text-sm text-gray-400">{l.from} → {l.to}</span>
+                                </div>
+                                <div className="text-gray-400 text-sm mt-1">{l.reason}</div>
+                                {l.comments && (
+                                  <div className="text-gray-500 text-xs mt-2 italic">
+                                    💬 {l.comments}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex flex-col items-end gap-1">
+                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                  l.status === 'Pending' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 
+                                  l.status === 'Approved' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 
+                                  'bg-red-500/20 text-red-400 border border-red-500/30'
+                                }`}>
+                                  {l.status}
+                                </span>
+                                {(l.approvedAt || l.rejectedAt) && (
+                                  <span className="text-xs text-gray-500">
+                                    {new Date(l.approvedAt || l.rejectedAt).toLocaleDateString()}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4 mt-2 pt-2 border-t border-gray-700/50">
+                              <span className="text-xs text-gray-500">
+                                📅 Submitted: {new Date(l.createdAt || Date.now()).toLocaleDateString()}
+                              </span>
+                              {l.duration && (
+                                <span className="text-xs text-gray-500">
+                                  ⏱️ {l.duration} {l.duration === 1 ? 'day' : 'days'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {leaves.length === 0 && (
+                          <div className="text-center py-8 text-gray-400">
+                            <div className="text-4xl mb-2">📋</div>
+                            <div>No leave requests yet.</div>
+                            <div className="text-sm text-gray-500 mt-1">Submit your first request using the form →</div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                     <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><h3 className="text-white font-semibold mb-4">Apply for Time Off</h3><form onSubmit={submitLeave} className="space-y-3"><label className="block text-sm text-gray-300">Type<select aria-label="Leave type" value={leaveForm.type} onChange={e=>setLeaveForm({...leaveForm,type:e.target.value})} className="w-full mt-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option>Vacation</option><option>Sick Leave</option><option>Casual Leave</option></select></label><label className="block text-sm text-gray-300">From<input aria-label="Leave from date" value={leaveForm.from} onChange={e=>setLeaveForm({...leaveForm,from:e.target.value})} type="date" className="w-full mt-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" /></label><label className="block text-sm text-gray-300">To<input aria-label="Leave to date" value={leaveForm.to} onChange={e=>setLeaveForm({...leaveForm,to:e.target.value})} type="date" className="w-full mt-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" /></label><label className="block text-sm text-gray-300">Reason<textarea aria-label="Leave reason" value={leaveForm.reason} onChange={e=>setLeaveForm({...leaveForm,reason:e.target.value})} className="w-full mt-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></textarea></label><div className="flex items-center gap-3"><button type="submit" disabled={submittingLeave} className="px-4 py-2 bg-primary text-white rounded-lg">{submittingLeave ? 'Submitting...' : 'Submit'}</button><button type="button" onClick={()=>setLeaveForm({type:'Vacation',from:'',to:'',reason:''})} className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg">Reset</button></div></form></div>
                   </div>
                 </motion.div>
