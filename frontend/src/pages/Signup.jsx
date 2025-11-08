@@ -176,7 +176,7 @@ function Signup() {
                   onChange={handleChange}
                   required
                   className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                  placeholder="John Doe"
+                  placeholder="Name"
                 />
               </div>
             </motion.div>
@@ -199,7 +199,7 @@ function Signup() {
                   onChange={handleChange}
                   required
                   className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                  placeholder="john@company.com"
+                  placeholder="name@gmail.com"
                 />
               </div>
             </motion.div>

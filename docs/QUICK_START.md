@@ -1,234 +1,235 @@
-# 🚀 WorkZen HRMS - Quick Start Guide
+# 🚀 Quick Start Guide - WorkZen HRMS
 
-## Welcome to Your Local MERN Project!
+## Prerequisites
+- Node.js (v16 or higher)
+- npm (v8 or higher)
+- Git
 
-This is a complete React-based HRMS landing page with Express backend.
+## Installation & Setup
 
----
+### 1. Clone the Repository
+```bash
+git clone https://github.com/DaxVirani03/WorkZen.git
+cd WorkZen
+```
 
-## ⚡ 3-Step Quick Start
-
-### Step 1: Start Backend Server
+### 2. Backend Setup
 
 ```powershell
+# Navigate to backend directory
 cd backend
+
+# Install dependencies
+npm install
+
+# Start the server (default port 5000)
 node server-simple.js
 ```
 
-You should see:
-```
-🚀 WorkZen HRMS Backend server is running on port 5000
-📍 Environment: development
-🔗 API URL: http://localhost:5000
-📊 Health check: http://localhost:5000/api/health
-```
+**Backend will be running at:** `http://localhost:5001`
 
-### Step 2: Start Frontend Server
+### 3. Frontend Setup
 
-Open a **new terminal** and run:
+Open a **new terminal window**:
 
 ```powershell
-cd frontend-react
+# Navigate to frontend directory
+cd frontend
+
+# Install dependencies (if not already installed)
+npm install
+
+# Start development server
 npm run dev
 ```
 
-You should see:
-```
-VITE v5.4.21  ready in 230 ms
+**Frontend will be running at:** `http://localhost:3000`
 
-➜  Local:   http://localhost:3000/
-```
-
-### Step 3: Open in Browser
+### 4. Open in Browser
 
 Visit: **http://localhost:3000**
 
----
+## � Quick Test Authentication
 
-## 🎯 What You'll See
-
-### Landing Page (/)
-- **14 comprehensive sections** in one page
-- Dark theme with smooth animations
-- Scroll navigation
-- Mobile responsive
-
-### Additional Pages
-- **/about** - About WorkZen HRMS
-- **/pricing** - Pricing plans
-- **/contact** - Contact form
-
----
-
-## 📊 Test the API
-
-### Method 1: Browser
-Open these URLs in your browser:
-- http://localhost:5000/api/users
-- http://localhost:5000/api/attendance
-- http://localhost:5000/api/payroll
-- http://localhost:5000/api/leaves
-- http://localhost:5000/api/health
-
-### Method 2: PowerShell
-```powershell
-# Get users
-Invoke-RestMethod -Uri http://localhost:5000/api/users
-
-# Get attendance
-Invoke-RestMethod -Uri http://localhost:5000/api/attendance
-
-# Get payroll
-Invoke-RestMethod -Uri http://localhost:5000/api/payroll
-
-# Get leaves
-Invoke-RestMethod -Uri http://localhost:5000/api/leaves
+### Demo Login Credentials
+```
+Email: admin@workzen.com
+Password: admin123
 ```
 
----
+### Test the Authentication Flow
 
-## 🎨 Customize the Landing Page
+1. **Sign Up** - Navigate to `/signup` and create a new account
+2. **Login** - Use the demo credentials above at `/login`
+3. **Dashboard** - After login, you'll see your dashboard at `/dashboard`
+4. **Logout** - Click the logout button to clear authentication
 
-1. Open: `frontend-react/src/pages/LandingPage.jsx`
-2. Find section comments:
-   ```javascript
-   {/* ==================== SECTION 1: HERO ==================== */}
-   ```
-3. Edit content, colors, or text
-4. Save and see instant updates!
+## �🔌 API Endpoints
 
----
+Test the backend API:
 
-## 🔧 Common Commands
-
-### Frontend
-```powershell
-cd frontend-react
-
-# Development
-npm run dev
-
-# Build
-npm run build
-
-# Preview build
-npm run preview
+### Health Check
+```bash
+GET http://localhost:5000/api/health
 ```
 
-### Backend
-```powershell
-cd backend
+### Authentication
+```bash
+# Register new user
+POST http://localhost:5000/api/auth/register
+Content-Type: application/json
 
-# Run server
-node server-simple.js
+{
+  "name": "John Doe",
+  "email": "john@company.com",
+  "password": "password123",
+  "role": "Employee"
+}
 
-# With nodemon (if installed)
-npm run dev
+# Login
+POST http://localhost:5000/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@workzen.com",
+  "password": "admin123"
+}
+
+# Get all users (debugging)
+GET http://localhost:5000/api/auth/users
 ```
 
----
-
-## 📁 Key Files
-
-### Frontend
-- `src/pages/LandingPage.jsx` - **ALL 14 sections here**
-- `src/App.jsx` - React Router configuration
-- `tailwind.config.js` - Colors and theme
-- `vite.config.js` - Dev server settings
-
-### Backend
-- `server-simple.js` - Express server
-- `controllers/*.js` - API logic with mock data
-- `routes/*.js` - API routes
-
----
-
-## 🎯 Project Structure
-
-```
-WorkZen-HRMS/
-├── frontend-react/        ← React + Vite
-│   └── src/
-│       └── pages/
-│           └── LandingPage.jsx  ← SINGLE FILE (14 sections)
-│
-└── backend/               ← Express API
-    ├── server-simple.js   ← Main server
-    └── controllers/       ← Mock data APIs
+### Users
+```bash
+GET http://localhost:5001/api/users
+GET http://localhost:5001/api/users/:id
 ```
 
----
+### Attendance
+```bash
+GET http://localhost:5001/api/attendance
+POST http://localhost:5001/api/attendance
+```
 
-## 💡 Tips
+### Payroll
+```bash
+GET http://localhost:5001/api/payroll
+POST http://localhost:5001/api/payroll/process
+```
 
-1. **Hot Reload**: Frontend updates automatically on save
-2. **API Testing**: Use browser DevTools Network tab
-3. **Dark Theme**: Everything styled for dark mode (#000)
-4. **Responsive**: Resize browser to test mobile view
-5. **Animations**: Scroll to see Framer Motion effects
+### Leaves
+```bash
+GET http://localhost:5001/api/leaves
+POST http://localhost:5001/api/leaves
+PUT http://localhost:5001/api/leaves/:id/approve
+```
 
----
-
-## 🐛 Troubleshooting
+## 🛠️ Troubleshooting
 
 ### Port Already in Use
-```powershell
-# Find process using port 3000 or 5000
-netstat -ano | findstr :3000
-netstat -ano | findstr :5000
 
-# Kill process (replace PID)
-taskkill /PID <process_id> /F
+**Problem:** Backend port 5001 or frontend port 3000 is already in use.
+
+**Solution:**
+```powershell
+# For backend, use a different port
+$env:PORT="5002"
+node server-simple.js
+
+# For frontend, update vite.config.js:
+# Change "port: 3000" to "port: 3001"
 ```
 
-### Cannot Find Module
+### Module Not Found
+
+**Problem:** Missing dependencies.
+
+**Solution:**
 ```powershell
-cd frontend-react
+# Backend
+cd backend
 npm install
 
-cd ../backend
+# Frontend
+cd frontend
 npm install
 ```
 
-### Page Not Loading
-1. Check both servers are running
-2. Clear browser cache (Ctrl+Shift+R)
-3. Check console for errors (F12)
+### CORS Errors
+
+**Problem:** Frontend can't connect to backend.
+
+**Solution:**
+- Check that backend is running on port 5001
+- Check vite.config.js proxy settings
+- Ensure CORS is enabled in backend
+
+## 📁 Project Structure
+
+```
+WorkZen/
+├── backend/          # Express.js API (Port 5001)
+├── frontend/         # React App (Port 3000)
+├── docs/             # Documentation
+└── README.md
+```
+
+## ✨ Features
+
+- ✅ Employee Management
+- ✅ Attendance Tracking
+- ✅ Payroll Processing
+- ✅ Leave Management
+- ✅ HR Analytics Dashboard
+- ✅ Core HR Functions
+- ✅ Responsive Design
+- ✅ Dark Theme
+
+## 🎯 Development Mode
+
+Both servers support hot-reload:
+- Backend: Uses nodemon (install with `npm install -g nodemon`)
+- Frontend: Vite dev server (automatic hot-reload)
+
+## 📝 Environment Variables
+
+### Backend (.env)
+```
+PORT=5001
+NODE_ENV=development
+```
+
+### Frontend
+No `.env` file needed for development. Configuration is in `vite.config.js`.
+
+## 🌐 Production Build
+
+### Frontend
+```bash
+cd frontend
+npm run build
+# Output in frontend/dist/
+```
+
+### Backend
+```bash
+cd backend
+npm start
+# Uses server.js (production ready)
+```
+
+## 📚 Additional Resources
+
+- Full Documentation: `docs/PROJECT_STATUS.md`
+- Progress History: `docs/progress.txt`
+- API Documentation: Coming soon
+
+## 🆘 Need Help?
+
+- Check `docs/` folder for detailed documentation
+- Open an issue on GitHub
+- Review the code comments
 
 ---
 
-## 📚 Documentation
-
-- **Root README**: `README-REACT-VERSION.md`
-- **Frontend README**: `frontend-react/README.md`
-- **Project Summary**: `PROJECT_SUMMARY.md`
-
----
-
-## ✅ Success Checklist
-
-- [ ] Backend running on port 5000
-- [ ] Frontend running on port 3000
-- [ ] Landing page loads with all sections
-- [ ] Navigation between pages works
-- [ ] API endpoints return data
-- [ ] Dark theme displays correctly
-- [ ] Animations work on scroll
-
----
-
-## 🎉 You're All Set!
-
-**Frontend**: http://localhost:3000  
-**Backend**: http://localhost:5000  
-**API Docs**: http://localhost:5000  
-
-Enjoy building with WorkZen HRMS! 🚀
-
----
-
-**Need Help?**
-- Check documentation files
-- Review code comments
-- Inspect browser console
-- Check terminal logs
+**Happy Coding! 🎉**
