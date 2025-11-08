@@ -14,7 +14,6 @@ export default function Contact() {
             <div className="flex space-x-8">
               <Link to="/" className="hover:text-primary-500 transition-colors">Home</Link>
               <Link to="/about" className="hover:text-primary-500 transition-colors">About</Link>
-              <Link to="/pricing" className="hover:text-primary-500 transition-colors">Pricing</Link>
               <Link to="/contact" className="hover:text-primary-500 transition-colors">Contact</Link>
             </div>
           </div>
@@ -52,7 +51,7 @@ export default function Contact() {
                 <MapPin className="w-6 h-6 text-primary-500 mt-1" />
                 <div>
                   <h3 className="font-semibold mb-1">Office</h3>
-                  <p className="text-gray-400">Mumbai, Maharashtra, India</p>
+                  <p className="text-gray-400">Surat, Gujarat, India</p>
                 </div>
               </div>
             </div>
