@@ -1,35 +1,84 @@
 /**
  * WorkZen HRMS - Employee Dashboard
- * Single-file dashboard for Employee role
- * Features (from Excalidraw flow):
- * - Punch In/Out for attendance
- * - Today's attendance summary
- * - My leave requests
- * - Payslip preview/download
- * - Monthly attendance chart
+ * Single-file page aligned visually with Admin Dashboard but restricted to Employee features:
+ * - Left sidebar: Employees, Attendance, Time Off (no Payroll/Reports/Settings)
+ * - Topbar: Search, Apply Time Off CTA, Avatar dropdown (Profile/Logout)
+ * - Main area: KPI widgets, Tabs (Directory / Attendance / Time Off)
+ *
+ * Replace mocks with real API calls as back-end evolves. Keep single-file convention.
  */
 
-import { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { 
-  LogOut, User, Clock, Calendar, DollarSign, FileText, 
-  CheckCircle, XCircle, AlertCircle, Download, Play, Square
+import { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Users, Clock, Calendar, Search, UserPlus, LogOut, User as UserIcon, ChevronDown,
+  CheckCircle, AlertCircle, X, Mail, Phone, MapPin
 } from 'lucide-react';
-import { Chart as ChartJS, ArcElement, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
+import { Line } from 'react-chartjs-2';
 
 // Register Chart.js components
-ChartJS.register(ArcElement, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
 function DashboardEmployee() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
-  const [isPunchedIn, setIsPunchedIn] = useState(false);
-  const [punchTime, setPunchTime] = useState(null);
+  const [activeMenu, setActiveMenu] = useState('Employees');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const avatarBtnRef = useRef(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+
+  function updateDropdownPosition() {
+    const btn = avatarBtnRef.current;
+    if (!btn || typeof window === 'undefined') return;
+    const rect = btn.getBoundingClientRect();
+    const dropdownWidth = 192; // matches w-48 (192px)
+    let left = rect.right + window.scrollX - dropdownWidth;
+    const minLeft = 8 + window.scrollX;
+    const maxLeft = window.innerWidth - dropdownWidth - 8 + window.scrollX;
+    if (left < minLeft) left = minLeft;
+    if (left > maxLeft) left = maxLeft;
+    const top = rect.bottom + window.scrollY + 8;
+    setDropdownPos({ top, left });
+  }
 
   useEffect(() => {
-    // Check authentication
+    if (!showProfileDropdown) return undefined;
+    updateDropdownPosition();
+    const handler = () => {
+      if (typeof window === 'undefined') return;
+      window.requestAnimationFrame(() => updateDropdownPosition());
+    };
+    window.addEventListener('resize', handler);
+    window.addEventListener('scroll', handler, { passive: true });
+    window.addEventListener('orientationchange', handler);
+    return () => {
+      window.removeEventListener('resize', handler);
+      window.removeEventListener('scroll', handler);
+      window.removeEventListener('orientationchange', handler);
+    };
+  }, [showProfileDropdown]);
+
+  // Data states
+  const [directory, setDirectory] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [kpis, setKpis] = useState({ present: 0, late: 0, leaves: 0, performance: 88 });
+  const [chartData, setChartData] = useState(null);
+
+  // Time off
+  const [showTimeOffModal, setShowTimeOffModal] = useState(false);
+  const [leaveForm, setLeaveForm] = useState({ type: 'Vacation', from: '', to: '', reason: '' });
+  const [leaves, setLeaves] = useState([]);
+  const [submittingLeave, setSubmittingLeave] = useState(false);
+
+  // Employee panel
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [showEmployeePanel, setShowEmployeePanel] = useState(false);
+
+  useEffect(() => {
     const token = localStorage.getItem('workzen_token');
     const role = localStorage.getItem('workzen_role');
     const userData = localStorage.getItem('workzen_user');
@@ -38,11 +87,105 @@ function DashboardEmployee() {
       navigate('/login');
       return;
     }
+    if (userData) setUser(JSON.parse(userData));
 
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
+    // initial fetches
+    fetchDirectory();
+    fetchAttendance();
+    fetchLeaves();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
+
+  // Fetch directory (uses /api/users mock)
+  async function fetchDirectory() {
+    try {
+      const res = await fetch('/api/users');
+      if (!res.ok) throw new Error('Directory load failed');
+      const data = await res.json();
+      setDirectory(data.users || []);
+    } catch (err) {
+      console.error(err);
+      setDirectory([]); // fallback
+    }
+  }
+
+  // Fetch attendance (mock-friendly)
+  async function fetchAttendance() {
+    try {
+      const res = await fetch('/api/attendance');
+      const data = await res.json();
+      // Filter by user email if provided, otherwise fall back to mock
+      const my = (data.records || []).filter(r => r.userEmail === user?.email);
+      if (!my.length) {
+        const mock = Array.from({ length: 30 }).map((_, i) => ({ day: i + 1, present: Math.random() > 0.05 ? 1 : 0, timeIn: '09:00', timeOut: '18:00' }));
+        setAttendance(mock);
+        computeKpisFromAttendance(mock);
+        buildChartFromAttendance(mock);
+      } else {
+        setAttendance(my);
+        computeKpisFromAttendance(my);
+        buildChartFromAttendance(my);
+      }
+    } catch (err) {
+      console.error(err);
+      const mock = Array.from({ length: 30 }).map((_, i) => ({ day: i + 1, present: Math.random() > 0.05 ? 1 : 0, timeIn: '09:00', timeOut: '18:00' }));
+      setAttendance(mock);
+      computeKpisFromAttendance(mock);
+      buildChartFromAttendance(mock);
+    }
+  }
+
+  async function fetchLeaves() {
+    try {
+      const res = await fetch('/api/leaves');
+      const data = await res.json();
+      // filter by user
+      const my = (data.leaves || []).filter(l => l.email === user?.email || l.userEmail === user?.email);
+      setLeaves(my);
+    } catch (err) {
+      console.error(err);
+      setLeaves([]);
+    }
+  }
+
+  function computeKpisFromAttendance(records) {
+    const present = records.filter(r => r.present === 1).length;
+    const late = records.filter(r => r.timeIn && r.timeIn > '09:15').length;
+    const leavesTaken = leaves.filter(l => l.status === 'Approved').length;
+    setKpis({ present, late, leaves: leavesTaken, performance: 88 });
+  }
+
+  function buildChartFromAttendance(records) {
+    const labels = records.map(r => `D${r.day}`);
+    const data = records.map(r => (r.present ? 1 : 0));
+    setChartData({ labels, datasets: [{ label: 'Present (1/0)', data, borderColor: '#005eb8', backgroundColor: 'rgba(0,94,184,0.1)', tension: 0.3 }] });
+  }
+
+  // Submit leave (optimistic)
+  async function submitLeave(e) {
+    e.preventDefault();
+    if (!leaveForm.from || !leaveForm.to || !leaveForm.reason) {
+      alert('Please fill from/to/reason');
+      return;
+    }
+    const optimistic = { id: Date.now(), type: leaveForm.type, from: leaveForm.from, to: leaveForm.to, reason: leaveForm.reason, status: 'Pending', email: user?.email, createdAt: new Date().toISOString() };
+    setLeaves(prev => [optimistic, ...prev]);
+    setSubmittingLeave(true);
+    try {
+      const res = await fetch('/api/leaves', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(optimistic) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Submit failed');
+      setLeaves(prev => prev.map(l => (l.id === optimistic.id ? { ...l, id: data.id || l.id, status: data.status || l.status } : l)));
+    } catch (err) {
+      console.error(err);
+      setLeaves(prev => prev.map(l => (l.id === optimistic.id ? { ...l, status: 'Failed' } : l)));
+      alert('Submit failed; saved locally as Failed');
+    } finally {
+      setSubmittingLeave(false);
+      setShowTimeOffModal(false);
+      setLeaveForm({ type: 'Vacation', from: '', to: '', reason: '' });
+    }
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('workzen_token');
@@ -51,282 +194,128 @@ function DashboardEmployee() {
     navigate('/login');
   };
 
-  const handlePunchInOut = () => {
-    if (!isPunchedIn) {
-      // Punch In
-      setIsPunchedIn(true);
-      setPunchTime(new Date().toLocaleTimeString());
-      console.log('✅ Punched In');
-    } else {
-      // Punch Out
-      setIsPunchedIn(false);
-      console.log('✅ Punched Out');
-    }
-  };
+  const filteredDirectory = directory.filter(u => (u.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || (u.role || '').toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // Mock data for monthly attendance chart
-  const attendanceData = {
-    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
-    datasets: [
-      {
-        label: 'Days Present',
-        data: [5, 5, 4, 5],
-        backgroundColor: 'rgba(0, 94, 184, 0.6)',
-        borderColor: '#005eb8',
-        borderWidth: 1,
-      },
-    ],
-  };
+  const chartOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, title: { display: true, text: 'Last 30 Days Attendance', color: '#fff' } }, scales: { y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(156,163,175,0.05)' } }, x: { ticks: { color: '#9ca3af' } } } };
 
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false,
-      },
-      title: {
-        display: true,
-        text: 'Monthly Attendance',
-        color: '#fff',
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        max: 5,
-        ticks: { color: '#9ca3af' },
-        grid: { color: 'rgba(156, 163, 175, 0.1)' },
-      },
-      x: {
-        ticks: { color: '#9ca3af' },
-        grid: { color: 'rgba(156, 163, 175, 0.1)' },
-      },
-    },
-  };
-
-  // Mock leave requests
-  const leaveRequests = [
-    { id: 1, type: 'Sick Leave', dates: 'Dec 15-16, 2025', status: 'Approved', days: 2 },
-    { id: 2, type: 'Casual Leave', dates: 'Dec 20, 2025', status: 'Pending', days: 1 },
-  ];
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white">Loading...</div>
-      </div>
-    );
-  }
+  if (!user) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
 
   return (
-    <div className="min-h-screen bg-black">
-      {/* Background Gradient */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl"></div>
+    <div className="min-h-screen bg-black flex">
+      {/* Sidebar */}
+      <motion.aside initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="w-64 bg-gray-900/50 backdrop-blur-xl border-r border-gray-800 flex flex-col">
+        <div className="p-6 border-b border-gray-800">
+          <h2 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">WorkZen</h2>
+          <p className="text-xs text-gray-400 mt-1">Employee</p>
+        </div>
+        <nav className="flex-1 p-4 space-y-2">
+          <motion.button onClick={() => setActiveMenu('Employees')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Employees' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Users className="w-5 h-5" /><span className="font-medium">Employees</span></motion.button>
+          <motion.button onClick={() => setActiveMenu('Attendance')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Attendance' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Clock className="w-5 h-5" /><span className="font-medium">Attendance</span></motion.button>
+          <motion.button onClick={() => setActiveMenu('Time Off')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Time Off' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Calendar className="w-5 h-5" /><span className="font-medium">Time Off</span></motion.button>
+        </nav>
+      </motion.aside>
+
+      {/* Main */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <motion.header initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-gray-900/50 backdrop-blur-xl border-b border-gray-800 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex-1 max-w-xl relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input aria-label="Search employees" type="text" placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary" />
+            </div>
+            <div className="flex items-center gap-4 ml-6">
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setShowTimeOffModal(true)} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"><UserPlus className="w-4 h-4" />Apply</motion.button>
+              <div className="relative">
+                <motion.button ref={avatarBtnRef} onClick={() => setShowProfileDropdown(p => !p)} whileHover={{ scale: 1.05 }} className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition-all">
+                  <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-sm">{user.name.split(' ')[0][0].toUpperCase()}</div>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showProfileDropdown ? 'rotate-180' : ''}`} />
+                </motion.button>
+
+                {typeof document !== 'undefined' && createPortal(
+                  <AnimatePresence>
+                    {showProfileDropdown && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, width: 192 }}
+                        className="bg-gray-800 border border-gray-700 rounded-lg shadow-xl overflow-hidden z-50"
+                      >
+                        <button onClick={() => { setShowProfileDropdown(false); navigate('/profile'); }} className="w-full flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white transition-all text-left"><UserIcon className="w-4 h-4" />Profile</button>
+                        <button onClick={() => { setShowProfileDropdown(false); handleLogout(); }} className="w-full flex items-center gap-3 px-4 py-3 text-gray-300 hover:bg-gray-700 hover:text-white transition-all text-left border-t border-gray-700"><LogOut className="w-4 h-4" />Logout</button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>,
+                  document.body
+                )}
+              </div>
+            </div>
+          </div>
+        </motion.header>
+
+        <div className="flex-1 overflow-y-auto p-6 relative">
+          <div className="absolute inset-0 overflow-hidden pointer-events-none"><div className="absolute top-0 left-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl"></div><div className="absolute bottom-0 right-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl"></div></div>
+          <div className="relative z-10 max-w-7xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><div className="flex items-center justify-between"><div><p className="text-gray-400 text-sm">Present this month</p><h3 className="text-3xl font-bold text-white mt-2">{kpis.present}</h3></div><div className="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center"><CheckCircle className="w-6 h-6 text-green-500" /></div></div></motion.div>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><div className="flex items-center justify-between"><div><p className="text-gray-400 text-sm">Leaves taken</p><h3 className="text-3xl font-bold text-white mt-2">{kpis.leaves}</h3></div><div className="w-12 h-12 bg-accent/10 rounded-lg flex items-center justify-center"><Calendar className="w-6 h-6 text-accent" /></div></div></motion.div>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><div className="flex items-center justify-between"><div><p className="text-gray-400 text-sm">Late days</p><h3 className="text-3xl font-bold text-white mt-2">{kpis.late}</h3></div><div className="w-12 h-12 bg-yellow-500/10 rounded-lg flex items-center justify-center"><AlertCircle className="w-6 h-6 text-yellow-500" /></div></div></motion.div>
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><div className="flex items-center justify-between"><div><p className="text-gray-400 text-sm">Performance</p><h3 className="text-3xl font-bold text-white mt-2">{kpis.performance}%</h3></div><div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center"><UserIcon className="w-6 h-6 text-primary" /></div></div></motion.div>
+            </div>
+
+            <div className="mb-6 flex items-center gap-4"><button onClick={() => setActiveMenu('Employees')} className={`px-4 py-2 rounded-lg ${activeMenu === 'Employees' ? 'bg-primary text-white' : 'bg-gray-800 text-gray-300'}`}>Directory</button><button onClick={() => setActiveMenu('Attendance')} className={`px-4 py-2 rounded-lg ${activeMenu === 'Attendance' ? 'bg-primary text-white' : 'bg-gray-800 text-gray-300'}`}>Attendance</button><button onClick={() => setActiveMenu('Time Off')} className={`px-4 py-2 rounded-lg ${activeMenu === 'Time Off' ? 'bg-primary text-white' : 'bg-gray-800 text-gray-300'}`}>Time Off</button></div>
+
+            <div>
+              {activeMenu === 'Employees' && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+                  <h2 className="text-xl font-semibold text-white mb-6">Employee Directory</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredDirectory.map((emp, idx) => (
+                      <motion.button key={emp.id || idx} whileHover={{ y: -4 }} onClick={() => { setSelectedEmployee(emp); setShowEmployeePanel(true); }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6 text-left cursor-pointer">
+                        <div className="flex items-center gap-4"><div className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-xl">{(emp.name||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><div><h3 className="text-lg font-semibold text-white">{emp.name}</h3><p className="text-gray-400 text-sm">{emp.role || emp.title || 'Employee'}</p><p className="text-gray-500 text-xs mt-1">{emp.email}</p></div></div>
+                      </motion.button>
+                    ))}
+                    {filteredDirectory.length === 0 && <div className="text-gray-400">No employees found.</div>}
+                  </div>
+                </motion.div>
+              )}
+
+              {activeMenu === 'Attendance' && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+                  <h2 className="text-xl font-semibold text-white mb-6">My Attendance</h2>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><div className="h-64">{chartData && <Line data={chartData} options={chartOptions} />}</div></div>
+                    <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><h3 className="text-white font-semibold mb-3">Recent Punches</h3><div className="space-y-2 text-sm text-gray-300">{attendance.slice(0,8).map((a,i)=>(<div key={i} className="flex items-center justify-between border-b border-gray-800 py-2"><div>{`Day ${a.day}`}</div><div className="text-gray-400">{a.present?`${a.timeIn} - ${a.timeOut}`:'Absent'}</div></div>))}</div></div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeMenu === 'Time Off' && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+                  <h2 className="text-xl font-semibold text-white mb-6">Time Off</h2>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><h3 className="text-white font-semibold mb-4">My Requests</h3><div className="space-y-3">{leaves.map(l => (<div key={l.id} className="p-3 bg-gray-800/50 rounded-lg border border-gray-700 flex items-center justify-between"><div><div className="text-white font-medium">{l.type} • {l.from} → {l.to}</div><div className="text-gray-400 text-xs mt-1">{l.reason}</div></div><div><span className={`px-3 py-1 rounded-full text-xs ${l.status==='Pending' ? 'bg-yellow-500/20 text-yellow-400' : l.status==='Approved' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>{l.status}</span></div></div>))}{leaves.length===0 && <div className="text-gray-400">No requests yet.</div>}</div></div>
+                    <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><h3 className="text-white font-semibold mb-4">Apply for Time Off</h3><form onSubmit={submitLeave} className="space-y-3"><label className="block text-sm text-gray-300">Type<select aria-label="Leave type" value={leaveForm.type} onChange={e=>setLeaveForm({...leaveForm,type:e.target.value})} className="w-full mt-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option>Vacation</option><option>Sick Leave</option><option>Casual Leave</option></select></label><label className="block text-sm text-gray-300">From<input aria-label="Leave from date" value={leaveForm.from} onChange={e=>setLeaveForm({...leaveForm,from:e.target.value})} type="date" className="w-full mt-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" /></label><label className="block text-sm text-gray-300">To<input aria-label="Leave to date" value={leaveForm.to} onChange={e=>setLeaveForm({...leaveForm,to:e.target.value})} type="date" className="w-full mt-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" /></label><label className="block text-sm text-gray-300">Reason<textarea aria-label="Leave reason" value={leaveForm.reason} onChange={e=>setLeaveForm({...leaveForm,reason:e.target.value})} className="w-full mt-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></textarea></label><div className="flex items-center gap-3"><button type="submit" disabled={submittingLeave} className="px-4 py-2 bg-primary text-white rounded-lg">{submittingLeave ? 'Submitting...' : 'Submit'}</button><button type="button" onClick={()=>setLeaveForm({type:'Vacation',from:'',to:'',reason:''})} className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg">Reset</button></div></form></div>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Header */}
-      <motion.header
-        initial={{ y: -20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="relative z-10 bg-gray-900/50 backdrop-blur-xl border-b border-gray-800"
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                Employee Dashboard
-              </h1>
-              <p className="text-sm text-gray-400 mt-1">Welcome back, {user.name}</p>
-            </div>
-            
-            <motion.button
-              onClick={handleLogout}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-all border border-gray-700"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Logout</span>
-            </motion.button>
-          </div>
-        </div>
-      </motion.header>
-
-      {/* Main Content */}
-      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Punch In/Out Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="mb-8"
-        >
-          <div className="bg-gradient-to-br from-primary/10 to-accent/10 border border-gray-800 rounded-2xl p-6">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-bold text-white mb-2">Attendance</h3>
-                <p className="text-gray-400">
-                  {isPunchedIn ? `Punched in at ${punchTime}` : 'Not punched in yet'}
-                </p>
-              </div>
-              
-              <motion.button
-                onClick={handlePunchInOut}
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className={`px-8 py-4 rounded-lg font-semibold flex items-center gap-3 transition-all ${
-                  isPunchedIn
-                    ? 'bg-red-500 hover:bg-red-600 text-white'
-                    : 'bg-primary hover:bg-blue-600 text-white'
-                }`}
-              >
-                {isPunchedIn ? (
-                  <>
-                    <Square className="w-6 h-6" />
-                    Punch Out
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-6 h-6" />
-                    Punch In
-                  </>
-                )}
-              </motion.button>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {/* Today's Status */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.2 }}
-            className="bg-gray-900/50 border border-gray-800 rounded-xl p-6"
-          >
-            <Clock className="w-8 h-8 text-primary mb-3" />
-            <p className="text-gray-400 text-sm mb-1">Today's Status</p>
-            <p className="text-2xl font-bold text-white">
-              {isPunchedIn ? 'Working' : 'Not Started'}
-            </p>
-          </motion.div>
-
-          {/* Leave Balance */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3 }}
-            className="bg-gray-900/50 border border-gray-800 rounded-xl p-6"
-          >
-            <Calendar className="w-8 h-8 text-green-400 mb-3" />
-            <p className="text-gray-400 text-sm mb-1">Leave Balance</p>
-            <p className="text-2xl font-bold text-white">12 Days</p>
-          </motion.div>
-
-          {/* This Month */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: 0.4 }}
-            className="bg-gray-900/50 border border-gray-800 rounded-xl p-6"
-          >
-            <CheckCircle className="w-8 h-8 text-accent mb-3" />
-            <p className="text-gray-400 text-sm mb-1">Days Present (Nov)</p>
-            <p className="text-2xl font-bold text-white">19 / 20</p>
-          </motion.div>
-        </div>
-
-        {/* Two Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Monthly Attendance Chart */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="bg-gray-900/50 border border-gray-800 rounded-xl p-6"
-          >
-            <h3 className="text-xl font-bold text-white mb-4">Attendance Overview</h3>
-            <div className="h-64">
-              <Bar data={attendanceData} options={chartOptions} />
-            </div>
-          </motion.div>
-
-          {/* Leave Requests */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="bg-gray-900/50 border border-gray-800 rounded-xl p-6"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-white">My Leave Requests</h3>
-              <button className="text-primary hover:text-accent text-sm font-semibold transition-colors">
-                Apply Leave +
-              </button>
-            </div>
-            
-            <div className="space-y-3">
-              {leaveRequests.map((leave) => (
-                <div key={leave.id} className="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-semibold text-white">{leave.type}</p>
-                      <p className="text-sm text-gray-400 mt-1">{leave.dates}</p>
-                      <p className="text-xs text-gray-500 mt-1">{leave.days} day(s)</p>
-                    </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                      leave.status === 'Approved' 
-                        ? 'bg-green-500/20 text-green-400' 
-                        : 'bg-yellow-500/20 text-yellow-400'
-                    }`}>
-                      {leave.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Payslip Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-          className="mt-6 bg-gray-900/50 border border-gray-800 rounded-xl p-6"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-xl font-bold text-white">Recent Payslips</h3>
-              <p className="text-sm text-gray-400 mt-1">Download your salary statements</p>
-            </div>
-            <FileText className="w-8 h-8 text-accent" />
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {['November 2025', 'October 2025', 'September 2025'].map((month, idx) => (
-              <motion.button
-                key={idx}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="bg-gray-800/50 rounded-lg p-4 border border-gray-700 hover:border-primary transition-all text-left group"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-white">{month}</p>
-                    <p className="text-sm text-gray-400 mt-1">$4,500</p>
-                  </div>
-                  <Download className="w-5 h-5 text-gray-400 group-hover:text-primary transition-colors" />
-                </div>
-              </motion.button>
-            ))}
-          </div>
-        </motion.div>
-      </main>
+      {/* Employee details panel (read-only) */}
+      <AnimatePresence>
+        {showEmployeePanel && selectedEmployee && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowEmployeePanel(false)} className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40" />
+            <motion.aside initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 25, stiffness: 200 }} className="fixed right-0 top-0 bottom-0 w-96 bg-gray-900 border-l border-gray-800 shadow-2xl z-50 overflow-y-auto">
+              <div className="p-6 border-b border-gray-800 flex items-center justify-between"><h3 className="text-xl font-bold text-white">Employee Profile</h3><button onClick={() => setShowEmployeePanel(false)} className="p-2 hover:bg-gray-800 rounded-lg"><X className="w-5 h-5 text-gray-400" /></button></div>
+              <div className="p-6 space-y-6"><div className="text-center"><div className="w-24 h-24 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-3xl mx-auto mb-4">{(selectedEmployee.name||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><h4 className="text-xl font-bold text-white">{selectedEmployee.name}</h4><p className="text-gray-400">{selectedEmployee.role || selectedEmployee.title}</p><p className="text-gray-500 text-sm mt-1">{selectedEmployee.department}</p></div><div className="space-y-3"><div className="flex items-center gap-3 text-gray-300"><Mail className="w-4 h-4 text-gray-400" /> <span className="text-sm">{selectedEmployee.email}</span></div><div className="flex items-center gap-3 text-gray-300"><Phone className="w-4 h-4 text-gray-400" /> <span className="text-sm">{selectedEmployee.phone || '—'}</span></div><div className="flex items-center gap-3 text-gray-300"><MapPin className="w-4 h-4 text-gray-400" /> <span className="text-sm">{selectedEmployee.department || '—'}</span></div><div className="flex items-center gap-3 text-gray-300"><Clock className="w-4 h-4 text-gray-400" /> <span className="text-sm">Joined: {selectedEmployee.joined || 'N/A'}</span></div></div><div><h5 className="text-sm font-semibold text-gray-400 uppercase mb-2">Recent Attendance</h5><div className="space-y-2 text-sm text-gray-300">{attendance.slice(0,5).map((a,i)=>(<div key={i} className="flex items-center justify-between border-b border-gray-800 py-2"><div>{`Day ${a.day}`}</div><div className="text-gray-400">{a.present?`${a.timeIn} - ${a.timeOut}`:'Absent'}</div></div>))}</div></div></div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

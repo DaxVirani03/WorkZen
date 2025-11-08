@@ -393,7 +393,7 @@ function DashboardAdmin() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-gray-400 text-sm">Payroll This Month</p>
-                    <h3 className="text-3xl font-bold text-accent mt-2">${monthlyPayroll.toLocaleString()}</h3>
+                    <h3 className="text-3xl font-bold text-accent mt-2">₹{monthlyPayroll.toLocaleString()}</h3>
                   </div>
                   <div className="w-12 h-12 bg-accent/20 rounded-lg flex items-center justify-center">
                     <DollarSign className="w-6 h-6 text-accent" />
