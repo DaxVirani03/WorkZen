@@ -9,6 +9,8 @@ import Dashboard from './pages/Dashboard';
 import DashboardEmployee from './pages/DashboardEmployee';
 import DashboardHROfficer from './pages/DashboardHROfficer';
 import DashboardPayrollOfficer from './pages/DashboardPayrollOfficer';
+import DashboardAdmin from './pages/DashboardAdmin';
+import Profile from './pages/Profile';
 
 /**
  * PrivateRoute - Protects routes based on authentication and role
@@ -33,7 +35,7 @@ function PrivateRoute({ children, allowedRole }) {
       case 'Payroll Officer':
         return <Navigate to="/dashboard/payroll" replace />;
       case 'Admin':
-        return <Navigate to="/dashboard/employee" replace />;
+        return <Navigate to="/dashboard/admin" replace />;
       default:
         return <Navigate to="/login" replace />;
     }
@@ -54,10 +56,28 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         
+        {/* Profile Page (Protected) */}
+        <Route 
+          path="/profile" 
+          element={
+            <PrivateRoute>
+              <Profile />
+            </PrivateRoute>
+          } 
+        />
+        
         {/* Legacy Dashboard (kept for backwards compatibility) */}
         <Route path="/dashboard" element={<Dashboard />} />
         
         {/* Role-Based Protected Dashboards */}
+        <Route 
+          path="/dashboard/admin" 
+          element={
+            <PrivateRoute allowedRole="Admin">
+              <DashboardAdmin />
+            </PrivateRoute>
+          } 
+        />
         <Route 
           path="/dashboard/employee" 
           element={

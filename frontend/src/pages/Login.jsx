@@ -79,8 +79,8 @@ function Login() {
             navigate('/dashboard/payroll');
             break;
           case 'Admin':
-            // Admin can access any dashboard, default to employee view
-            navigate('/dashboard/employee');
+            // Admin redirects to admin dashboard
+            navigate('/dashboard/admin');
             break;
           default:
             // Fallback

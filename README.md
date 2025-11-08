@@ -105,33 +105,40 @@ WorkZen HRMS includes a comprehensive authentication system with role-based dash
 
 ### Roles & Dashboards
 
-**Three User Roles with Dedicated Dashboards:**
-1. **Employee** → `/dashboard/employee`
+**Four User Roles with Dedicated Dashboards:**
+1. **Admin** → `/dashboard/admin`
+   - View all employees in card grid with status indicators
+   - Search and filter employees
+   - View quick summary metrics (total employees, present, on leave, payroll cost)
+   - Attendance trend analytics with Chart.js
+   - Manage employee details (mark attendance, corrections, view payslips)
+   - Review and approve pending leave requests
+   - Access full admin menu: Employees, Attendance, Time Off, Payroll, Reports, Settings
+
+2. **Employee** → `/dashboard/employee`
    - Punch In/Out attendance tracking
    - View monthly attendance chart
    - Apply for leave and view leave balance
    - Download payslips
 
-2. **HR Officer** → `/dashboard/hr`
+3. **HR Officer** → `/dashboard/hr`
    - Approve/reject leave requests
    - Review attendance corrections
    - Manage employee directory
    - Allocate leave balances
 
-3. **Payroll Officer** → `/dashboard/payroll`
+4. **Payroll Officer** → `/dashboard/payroll`
    - Process monthly payroll (Run Payroll)
    - View locked payruns history
    - Generate payslips in bulk
    - Monitor payroll costs with analytics
    - Track approved leaves affecting payroll
 
-4. **Admin** → (Seeded/System-only, not available for signup)
-
 ### Sign Up & Login
 
 **Sign Up** (`/signup`):
 - Allowed roles: **Employee**, **HR Officer**, **Payroll Officer** only
-- Admin accounts are created by the system (cannot sign up via UI)
+- Admin accounts are seeded by the system (cannot sign up via UI)
 - Required fields: Name, Email, Password, Role
 - After signup → redirected to login page
 
@@ -139,6 +146,13 @@ WorkZen HRMS includes a comprehensive authentication system with role-based dash
 - Enter email and password
 - System automatically redirects to role-specific dashboard
 - localStorage stores: `workzen_token`, `workzen_role`, `workzen_user`
+- **Navbar Profile Dropdown**: Click avatar → Profile or Logout
+
+**Profile Page** (`/profile`):
+- View and edit user information
+- Protected route (requires authentication)
+- Navigate from navbar avatar dropdown
+- Updates saved to localStorage (TODO: sync with backend)
 
 **Test Credentials:**
 ```
@@ -153,10 +167,10 @@ Admin:           admin@workzen.com / admin123
 1. **Signup** → Only 3 roles allowed (Employee, HR Officer, Payroll Officer)
 2. **Login** → Returns token + user object with role
 3. **Role-Based Redirect:**
+   - Admin → `/dashboard/admin`
    - Employee → `/dashboard/employee`
    - HR Officer → `/dashboard/hr`
    - Payroll Officer → `/dashboard/payroll`
-   - Admin → `/dashboard/employee` (fallback)
 4. **Protected Routes** → PrivateRoute component checks token and role
 5. **Logout** → Clears localStorage and redirects to `/login`
 
@@ -191,6 +205,53 @@ Admin:           admin@workzen.com / admin123
 - **Responsive**: Works seamlessly on all devices
 - **Secure**: Token-based authentication with localStorage
 - **User-Friendly**: Show/hide password toggles and clear error messages
+
+### Admin Dashboard Features
+
+The Admin Dashboard (`/dashboard/admin`) follows the Excalidraw HRMS workflow and includes:
+
+**Layout:**
+- **Left Sidebar**: Vertical navigation menu with Employees, Attendance, Time Off, Payroll, Reports, Settings
+- **Top Bar**: 
+  - Search field (filters employees by name/title)
+  - "NEW" CTA button (add new employee)
+  - Profile avatar dropdown (Profile / Logout)
+- **Main Area**: Employee card grid with status indicators
+
+**Quick Summary Widgets:**
+- Total Employees (count)
+- Present Today (green indicator)
+- On Leave Today (blue airplane icon)
+- Payroll This Month (currency format)
+
+**Employee Card Grid:**
+- 3 columns on desktop, 2 on tablet, 1 on mobile
+- Each card displays:
+  - Profile avatar (initials if no photo)
+  - Employee name and job title
+  - Status indicator in top-right corner:
+    - 🟢 Green dot = Present in office
+    - ✈️ Airplane icon = On leave
+    - 🟡 Yellow dot = Absent (no time-off applied)
+- Hover animations (shadow lift with Framer Motion)
+- Click to open employee details panel
+
+**Employee Details Panel:**
+- Slides in from right side
+- Shows full employee information (contact, department)
+- Quick actions: Mark Attendance, Add Correction, View Payslip
+- Close with X button or click backdrop
+
+**Analytics:**
+- Chart.js line chart showing 7-day attendance trend
+- Pending leave approvals sidebar widget
+- Status legend for quick reference
+
+**How to Logout:**
+- Click profile avatar (top-right)
+- Select "Logout" from dropdown
+- Clears all authentication data
+- Redirects to `/login`
 
 ### Environment Variables
 
