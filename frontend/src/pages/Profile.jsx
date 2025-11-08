@@ -218,7 +218,7 @@ function Profile() {
                   User ID
                 </label>
                 <div className="px-4 py-3 bg-gray-800/50 border border-gray-800 rounded-lg text-gray-400 font-mono text-sm">
-                  {user.id}
+                  {user.userId}
                 </div>
               </div>
 
