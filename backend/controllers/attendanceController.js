@@ -1,5 +1,5 @@
 const Attendance = require('../models/Attendance');
-const Employee = require('../models/Employee');
+const User = require('../models/User'); // Changed from Employee to User
 
 /**
  * Get all attendance records with filters

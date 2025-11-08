@@ -1,12 +1,12 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Payroll = require('../models/Payroll');
-const Employee = require('../models/Employee');
+const User = require('../models/User'); // Changed from Employee to User
 
 const router = express.Router();
 
 // @route   POST /api/payroll/generate
-// @desc    Generate payroll for all employees
+// @desc    Generate payroll for all users/employees
 // @access  Private (Admin/HR)
 router.post('/generate', [
   body('payPeriod.startDate', 'Pay period start date is required').isISO8601(),
@@ -46,6 +46,86 @@ router.post('/generate', [
   }
 });
 
+// @route   POST /api/payroll
+// @desc    Create individual payslip
+// @access  Private (Payroll Officer, Admin)
+router.post('/', [
+  body('employee', 'Employee ID is required').notEmpty(),
+  body('payPeriod.startDate', 'Pay period start date is required').isISO8601(),
+  body('payPeriod.endDate', 'Pay period end date is required').isISO8601(),
+  body('payDate', 'Pay date is required').isISO8601(),
+  body('basicSalary', 'Basic salary is required').isNumeric()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation errors',
+        errors: errors.array()
+      });
+    }
+
+    // Check if employee exists
+    const employee = await User.findById(req.body.employee);
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found'
+      });
+    }
+
+    // Create payroll record
+    const payroll = new Payroll({
+      employee: req.body.employee,
+      payPeriod: req.body.payPeriod,
+      payDate: req.body.payDate,
+      basicSalary: req.body.basicSalary,
+      earnings: req.body.earnings || {},
+      deductions: req.body.deductions || {},
+      attendanceSummary: req.body.attendanceSummary || {},
+      grossEarnings: req.body.grossEarnings || 0,
+      netPay: req.body.netPay || 0,
+      paymentStatus: req.body.paymentStatus || 'pending',
+      status: req.body.status || 'draft',
+      createdBy: req.body.employee // Use employee as creator for now (should be logged-in user in production)
+    });
+
+    await payroll.save();
+
+    // Populate employee details
+    await payroll.populate('employee', 'name email department designation employeeId');
+
+    res.status(201).json({
+      success: true,
+      message: 'Payslip created successfully',
+      payroll: payroll
+    });
+
+  } catch (error) {
+    console.error('Create payslip error:', error);
+    
+    // Handle duplicate key error (E11000)
+    if (error.code === 11000) {
+      const employeeName = employee ? (employee.name || `${employee.firstName} ${employee.lastName}`) : 'this employee';
+      const startDate = req.body.payPeriod?.startDate || 'N/A';
+      const endDate = req.body.payPeriod?.endDate || 'N/A';
+      
+      return res.status(409).json({
+        success: false,
+        message: `A payslip already exists for ${employeeName} for the period ${startDate} to ${endDate}. Please select a different employee or change the pay period dates.`,
+        error: 'DUPLICATE_PAYSLIP'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Server error creating payslip',
+      error: error.message
+    });
+  }
+});
+
 // @route   GET /api/payroll
 // @desc    Get payroll records with filters
 // @access  Private
@@ -71,10 +151,10 @@ router.get('/', async (req, res) => {
       filter['payPeriod.endDate'] = { $lte: new Date(req.query.payPeriodEnd) };
     }
 
-    const payroll = await Payroll.find(filter)
-      .populate('employee', 'firstName lastName employeeId department position')
-      .populate('approvedBy', 'firstName lastName')
-      .populate('processedBy', 'firstName lastName')
+    const payrolls = await Payroll.find(filter)
+      .populate('employee', 'name firstName lastName email employeeId department designation position role')
+      .populate('approvedBy', 'name firstName lastName')
+      .populate('processedBy', 'name firstName lastName')
       .sort({ payDate: -1 })
       .skip(skip)
       .limit(limit);
@@ -83,14 +163,12 @@ router.get('/', async (req, res) => {
 
     res.json({
       success: true,
-      data: {
-        payroll,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit)
-        }
+      payrolls: payrolls,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
       }
     });
 
@@ -99,6 +177,78 @@ router.get('/', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error retrieving payroll records'
+    });
+  }
+});
+
+// @route   GET /api/payroll/stats
+// @desc    Get payroll statistics for dashboard (dynamic from database)
+// @access  Private (Payroll Officer, Admin)
+router.get('/stats', async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const currentMonth = month ? parseInt(month) - 1 : new Date().getMonth();
+    const currentYear = year ? parseInt(year) : new Date().getFullYear();
+
+    console.log('📊 Fetching payroll stats...');
+
+    // Total employees
+    const totalEmployees = await User.countDocuments({ 
+      role: { $in: ['Employee', 'HR Officer', 'Payroll Officer', 'Admin'] },
+      isActive: true
+    });
+
+    // Payruns completed (processed payrolls in current month)
+    const payruns = await Payroll.countDocuments({
+      paymentStatus: { $in: ['processed', 'paid'] },
+      payDate: {
+        $gte: new Date(currentYear, currentMonth, 1),
+        $lt: new Date(currentYear, currentMonth + 1, 1)
+      }
+    });
+
+    // Pending leave approvals
+    const LeaveRequest = require('../models/LeaveRequest');
+    const pendingLeaves = await LeaveRequest.countDocuments({ status: 'pending' });
+
+    // Current month payroll (sum of all net pay for current month)
+    const payrollSum = await Payroll.aggregate([
+      {
+        $match: {
+          payDate: {
+            $gte: new Date(currentYear, currentMonth, 1),
+            $lt: new Date(currentYear, currentMonth + 1, 1)
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalNetPay: { $sum: '$netPay' },
+          totalGross: { $sum: '$grossEarnings' }
+        }
+      }
+    ]);
+
+    const currentMonthPayroll = payrollSum[0]?.totalNetPay || 0;
+
+    console.log('✅ Stats:', { totalEmployees, payruns, pendingLeaves, currentMonthPayroll });
+
+    res.json({
+      success: true,
+      stats: {
+        totalEmployees,
+        payruns,
+        pendingLeaves,
+        currentMonthPayroll: Math.round(currentMonthPayroll)
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error fetching payroll stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error retrieving payroll statistics',
+      error: error.message
     });
   }
 });
@@ -373,3 +523,4 @@ router.get('/summary/overview', async (req, res) => {
 });
 
 module.exports = router;
+

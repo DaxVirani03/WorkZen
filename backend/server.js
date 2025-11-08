@@ -45,11 +45,12 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/employees', require('./routes/employees'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/system', require('./routes/system'));
 
-// Use simple routes with full CRUD operations
-app.use('/api/attendance', require('./routes/attendance-simple'));
+// Use routes with full CRUD operations
+app.use('/api/attendance', require('./routes/attendance'));
 app.use('/api/leave', require('./routes/leaves-simple'));
-app.use('/api/payroll', require('./routes/payroll-simple'));
+app.use('/api/payroll', require('./routes/payroll')); // Changed from payroll-simple to payroll
 app.use('/api/reports', require('./routes/reports'));
 
 // Leave requests (new endpoint for employee time-off)

@@ -1,11 +1,11 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const Employee = require('../models/Employee');
+const User = require('../models/User'); // Changed from Employee to User
 
 const router = express.Router();
 
 // @route   GET /api/employees
-// @desc    Get all employees with pagination and filters
+// @desc    Get all employees (users with role 'Employee') with pagination and filters
 // @access  Private
 router.get('/', async (req, res) => {
   try {
@@ -13,8 +13,12 @@ router.get('/', async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    // Build filter object
-    const filter = { isActive: true };
+    // Build filter object - only get users who are employees
+    const filter = { 
+      isActive: true,
+      // Get all users (employees, admins, HR, payroll officers)
+      // If you want only employees: role: 'Employee'
+    };
 
     if (req.query.department) {
       filter.department = req.query.department;
@@ -29,13 +33,13 @@ router.get('/', async (req, res) => {
       ];
     }
 
-    const employees = await Employee.find(filter)
+    const employees = await User.find(filter)
       .select('-password')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit);
 
-    const total = await Employee.countDocuments(filter);
+    const total = await User.countDocuments(filter);
 
     res.json({
       success: true,
@@ -64,7 +68,7 @@ router.get('/', async (req, res) => {
 // @access  Private
 router.get('/:id', async (req, res) => {
   try {
-    const employee = await Employee.findById(req.params.id).select('-password');
+    const employee = await User.findById(req.params.id).select('-password');
 
     if (!employee) {
       return res.status(404).json({
@@ -127,20 +131,20 @@ router.post('/', [
     } = req.body;
 
     // Check if employee already exists
-    const existingEmployee = await Employee.findOne({ email });
+    const existingEmployee = await User.findOne({ email });
     if (existingEmployee) {
       return res.status(400).json({
         success: false,
-        message: 'Employee with this email already exists'
+        message: 'User with this email already exists'
       });
     }
 
     // Generate employee ID
-    const employeeCount = await Employee.countDocuments();
+    const employeeCount = await User.countDocuments();
     const employeeId = `EMP${String(employeeCount + 1).padStart(4, '0')}`;
 
-    // Create new employee
-    const employee = new Employee({
+    // Create new employee (as User)
+    const employee = new User({
       firstName,
       lastName,
       email,
@@ -161,7 +165,7 @@ router.post('/', [
     await employee.save();
 
     // Remove password from response
-    const employeeResponse = await Employee.findById(employee._id).select('-password');
+    const employeeResponse = await User.findById(employee._id).select('-password');
 
     res.status(201).json({
       success: true,

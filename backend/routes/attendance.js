@@ -1,15 +1,15 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Attendance = require('../models/Attendance');
-const Employee = require('../models/Employee');
+const User = require('../models/User'); // Changed from Employee to User
 
 const router = express.Router();
 
 // @route   POST /api/attendance/check-in
-// @desc    Employee check-in
+// @desc    User/Employee check-in
 // @access  Private
 router.post('/check-in', [
-  body('employeeId', 'Employee ID is required').notEmpty(),
+  body('employeeId', 'User ID is required').notEmpty(), // Still called employeeId for compatibility
   body('location', 'Location is optional').optional()
 ], async (req, res) => {
   try {
@@ -24,12 +24,12 @@ router.post('/check-in', [
 
     const { employeeId, location, method = 'web' } = req.body;
 
-    // Find employee
-    const employee = await Employee.findById(employeeId);
+    // Find user (employee)
+    const employee = await User.findById(employeeId);
     if (!employee) {
       return res.status(404).json({
         success: false,
-        message: 'Employee not found'
+        message: 'User not found'
       });
     }
 

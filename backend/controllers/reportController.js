@@ -1,7 +1,7 @@
 const Payroll = require('../models/Payroll');
 const Leave = require('../models/Leave');
 const Attendance = require('../models/Attendance');
-const Employee = require('../models/Employee');
+const User = require('../models/User'); // Changed from Employee to User
 
 /**
  * Generate payroll summary report

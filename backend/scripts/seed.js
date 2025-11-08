@@ -7,7 +7,7 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const User = require('../models/User');
-const Employee = require('../models/Employee');
+// Employee model merged into User model
 
 const connectDB = async () => {
   try {

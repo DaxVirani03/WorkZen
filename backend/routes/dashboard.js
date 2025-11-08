@@ -1,5 +1,5 @@
 const express = require('express');
-const Employee = require('../models/Employee');
+const User = require('../models/User'); // Changed from Employee to User
 const Attendance = require('../models/Attendance');
 const Leave = require('../models/Leave');
 const Payroll = require('../models/Payroll');
@@ -11,9 +11,9 @@ const router = express.Router();
 // @access  Private
 router.get('/overview', async (req, res) => {
   try {
-    // Employee statistics
-    const totalEmployees = await Employee.countDocuments({ isActive: true });
-    const departmentStats = await Employee.getDepartmentStats();
+    // Employee statistics (from User model)
+    const totalEmployees = await User.countDocuments({ isActive: true });
+    const departmentStats = await User.getDepartmentStats();
 
     // Attendance statistics (current month)
     const currentMonth = new Date();

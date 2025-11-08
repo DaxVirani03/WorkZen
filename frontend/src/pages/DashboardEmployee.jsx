@@ -382,24 +382,14 @@ function DashboardEmployee() {
       }
 
       const payload = {
-        employee: userId,
-        date: new Date().toISOString().split('T')[0],
-        checkIn: {
-          time: new Date().toISOString(),
-          location: location,
-          method: 'web',
-          ipAddress: '0.0.0.0', // You can get actual IP from backend
-          deviceInfo: {
-            userAgent: navigator.userAgent,
-            platform: navigator.platform || 'Unknown'
-          }
-        },
-        status: 'present'
+        employeeId: userId,
+        location: location,
+        method: 'web'
       };
 
       console.log('📤 Sending check-in payload:', payload);
       
-      const res = await fetch('/api/attendance', {
+      const res = await fetch('http://localhost:5000/api/attendance/check-in', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -415,7 +405,7 @@ function DashboardEmployee() {
         throw new Error(data.message || data.error || 'Check-in failed');
       }
 
-      setTodayAttendance(data.attendance || data);
+      setTodayAttendance(data.data?.attendance || data.attendance || data);
       alert('✅ Checked in successfully!');
       
       // Refresh attendance list
@@ -460,6 +450,7 @@ function DashboardEmployee() {
       }
 
       const payload = {
+        employeeId: user?._id || user?.id,
         checkOut: {
           time: new Date().toISOString(),
           location: location,
@@ -472,7 +463,7 @@ function DashboardEmployee() {
         }
       };
 
-      const res = await fetch(`/api/attendance/${todayAttendance._id}`, {
+      const res = await fetch(`http://localhost:5000/api/attendance/check-out`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -484,7 +475,7 @@ function DashboardEmployee() {
         throw new Error(data.message || 'Check-out failed');
       }
 
-      setTodayAttendance(data.attendance || data);
+      setTodayAttendance(data.data?.attendance || data.attendance || data);
       alert('✅ Checked out successfully!');
       
       // Refresh attendance list

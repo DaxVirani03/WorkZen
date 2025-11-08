@@ -59,7 +59,7 @@ function Dashboard() {
     { icon: Users, label: 'Total Employees', value: '248', color: 'text-blue-400' },
     { icon: Calendar, label: 'Today\'s Attendance', value: '234', color: 'text-green-400' },
     { icon: Clock, label: 'Pending Leaves', value: '12', color: 'text-yellow-400' },
-    { icon: DollarSign, label: 'Payroll This Month', value: '$124K', color: 'text-accent' },
+    { icon: DollarSign, label: 'Payroll This Month', value: '₹124K', color: 'text-accent' },
   ];
 
   const quickActions = [

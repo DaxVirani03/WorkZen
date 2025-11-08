@@ -1,5 +1,5 @@
 const Payroll = require('../models/Payroll');
-const Employee = require('../models/Employee');
+const User = require('../models/User'); // Changed from Employee to User
 const Attendance = require('../models/Attendance');
 
 /**
@@ -132,16 +132,16 @@ exports.processPayroll = async (req, res) => {
     if (!employee || !startDate || !endDate) {
       return res.status(400).json({
         success: false,
-        message: 'Employee, start date, and end date are required'
+        message: 'User, start date, and end date are required'
       });
     }
 
-    // Get employee details
-    const emp = await Employee.findById(employee);
+    // Get user (employee) details
+    const emp = await User.findById(employee);
     if (!emp) {
       return res.status(404).json({
         success: false,
-        message: 'Employee not found'
+        message: 'User not found'
       });
     }
 
@@ -316,6 +316,73 @@ exports.getPayslips = async (req, res) => {
       payslips
     });
   } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server Error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get payroll statistics for dashboard
+ * @route GET /api/payroll/stats
+ * @access Protected (Payroll Officer, Admin)
+ */
+exports.getPayrollStats = async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const currentMonth = month ? parseInt(month) - 1 : new Date().getMonth();
+    const currentYear = year ? parseInt(year) : new Date().getFullYear();
+
+    // Total employees
+    const totalEmployees = await User.countDocuments({ role: { $in: ['Employee', 'HR Officer', 'Payroll Officer', 'Admin'] } });
+
+    // Payruns completed (processed payrolls in current month)
+    const payruns = await Payroll.countDocuments({
+      paymentStatus: { $in: ['processed', 'paid'] },
+      payDate: {
+        $gte: new Date(currentYear, currentMonth, 1),
+        $lt: new Date(currentYear, currentMonth + 1, 1)
+      }
+    });
+
+    // Pending leave approvals
+    const Leave = require('../models/LeaveRequest');
+    const pendingLeaves = await Leave.countDocuments({ status: 'pending' });
+
+    // Current month payroll (sum of all net pay for current month)
+    const payrollSum = await Payroll.aggregate([
+      {
+        $match: {
+          payDate: {
+            $gte: new Date(currentYear, currentMonth, 1),
+            $lt: new Date(currentYear, currentMonth + 1, 1)
+          }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalNetPay: { $sum: '$netPay' },
+          totalGross: { $sum: '$grossEarnings' }
+        }
+      }
+    ]);
+
+    const currentMonthPayroll = payrollSum[0]?.totalNetPay || 0;
+
+    res.json({
+      success: true,
+      stats: {
+        totalEmployees,
+        payruns,
+        pendingLeaves,
+        currentMonthPayroll: Math.round(currentMonthPayroll)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching payroll stats:', error);
     res.status(500).json({
       success: false,
       message: 'Server Error',

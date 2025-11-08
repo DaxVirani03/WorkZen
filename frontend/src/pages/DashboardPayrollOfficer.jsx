@@ -44,6 +44,8 @@ import {
   PointElement, LineElement, Title, Tooltip, Legend 
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
+import PayslipModal from '../components/PayslipModal';
+import NewPayslipModal from '../components/NewPayslipModal';
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Title, Tooltip, Legend);
@@ -62,9 +64,18 @@ function DashboardPayrollOfficer() {
   // Payroll state
   const [payrolls, setPayrolls] = useState([]);
   const [showPayslipModal, setShowPayslipModal] = useState(false);
+  const [showNewPayslipModal, setShowNewPayslipModal] = useState(false);
   const [selectedPayslip, setSelectedPayslip] = useState(null);
   const [processingPayroll, setProcessingPayroll] = useState(false);
   const [payrollChart, setPayrollChart] = useState(null);
+  
+  // Dashboard stats
+  const [stats, setStats] = useState({
+    totalEmployees: 0,
+    payruns: 0,
+    pendingLeaves: 0,
+    currentMonthPayroll: 0
+  });
   
   // Time Off state
   const [leaves, setLeaves] = useState([]);
@@ -144,35 +155,84 @@ function DashboardPayrollOfficer() {
     }
     
     // Fetch initial data
+    fetchStats();
     fetchPayrolls();
     fetchLeaves();
     fetchAttendance();
   }, [navigate]);
 
-  // Fetch payrolls
+  // Fetch dashboard statistics
+  const fetchStats = async () => {
+    try {
+      console.log('📊 Fetching payroll dashboard stats...');
+      const response = await fetch('http://localhost:5000/api/payroll/stats');
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch stats: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('✅ Payroll stats loaded:', data.stats);
+      
+      if (data.success && data.stats) {
+        setStats(data.stats);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching stats:', error);
+      showToast('Failed to load dashboard statistics', 'error');
+    }
+  };
+
+  // Fetch payrolls from API
   const fetchPayrolls = async () => {
     try {
-      // TODO: Replace with real API call
-      // const response = await fetch('/api/payroll', { headers: { 'Authorization': `Bearer ${localStorage.getItem('workzen_token')}` } });
-      // const data = await response.json();
+      console.log('💰 Fetching payrolls from API...');
+      const response = await fetch('http://localhost:5000/api/payroll');
       
-      // Mock data
-      const mockPayrolls = [
-        { id: 1, name: 'Sarah Johnson', department: 'Engineering', baseSalary: 8500, deductions: 850, netPay: 7650, status: 'processed' },
-        { id: 2, name: 'Michael Chen', department: 'Product', baseSalary: 9200, deductions: 920, netPay: 8280, status: 'processed' },
-        { id: 3, name: 'Emily Rodriguez', department: 'Design', baseSalary: 7800, deductions: 780, netPay: 7020, status: 'pending' },
-        { id: 4, name: 'James Wilson', department: 'HR', baseSalary: 8000, deductions: 800, netPay: 7200, status: 'processed' },
-        { id: 5, name: 'Anna Kumar', department: 'Engineering', baseSalary: 8800, deductions: 880, netPay: 7920, status: 'processed' },
-        { id: 6, name: 'David Park', department: 'Engineering', baseSalary: 9000, deductions: 900, netPay: 8100, status: 'processed' },
-        { id: 7, name: 'Lisa Thompson', department: 'Marketing', baseSalary: 7500, deductions: 750, netPay: 6750, status: 'processed' },
-        { id: 8, name: 'Robert Martinez', department: 'Sales', baseSalary: 7200, deductions: 720, netPay: 6480, status: 'pending' },
-      ];
+      if (!response.ok) {
+        throw new Error(`Failed to fetch payrolls: ${response.status}`);
+      }
       
-      setPayrolls(mockPayrolls);
-      buildPayrollChart(mockPayrolls);
+      const data = await response.json();
+      console.log('✅ Payrolls API response:', data);
+      console.log('📊 Number of payrolls:', data.payrolls?.length || 0);
+      
+      if (data.success && data.payrolls && data.payrolls.length > 0) {
+        // Format payrolls for display
+        console.log('🔄 Formatting payrolls for display...');
+        const formattedPayrolls = data.payrolls.map(p => ({
+          id: p._id,
+          employeeId: p.employee?._id || p.employee,
+          name: p.employee?.name || `${p.employee?.firstName || ''} ${p.employee?.lastName || ''}`.trim() || 'Unknown',
+          department: p.employee?.department || 'N/A',
+          baseSalary: p.basicSalary || 0,
+          grossEarnings: p.grossEarnings || 0,
+          deductions: (p.deductions?.tax?.incomeTax || 0) + 
+                      (p.deductions?.tax?.professionalTax || 0) + 
+                      (p.deductions?.providentFund?.employee || 0) +
+                      (p.deductions?.insurance || 0) +
+                      (p.deductions?.loanRepayment || 0) +
+                      (p.deductions?.other || 0),
+          netPay: p.netPay || 0,
+          status: p.paymentStatus || p.status || 'pending',
+          payDate: p.payDate,
+          payPeriod: p.payPeriod,
+          fullData: p // Store full payroll data for payslip modal
+        }));
+        
+        console.log('✅ Formatted payrolls:', formattedPayrolls);
+        console.log(`📋 Displaying ${formattedPayrolls.length} payroll records`);
+        setPayrolls(formattedPayrolls);
+        buildPayrollChart(formattedPayrolls);
+      } else {
+        console.warn('⚠️ No payroll records in response');
+        setPayrolls([]);
+        showToast('No payroll records found', 'info');
+      }
     } catch (error) {
-      console.error('Error fetching payrolls:', error);
+      console.error('❌ Error fetching payrolls:', error);
       showToast('Failed to load payroll data', 'error');
+      setPayrolls([]);
     }
   };
 
@@ -187,7 +247,7 @@ function DashboardPayrollOfficer() {
     const chartData = {
       labels: Object.keys(deptTotals),
       datasets: [{
-        label: 'Total Payroll by Department ($)',
+        label: 'Total Payroll by Department (₹)',
         data: Object.values(deptTotals),
         backgroundColor: 'rgba(0, 94, 184, 0.7)',
         borderColor: '#005eb8',
@@ -469,11 +529,11 @@ function DashboardPayrollOfficer() {
     leaveFilter === 'all' ? true : l.status === leaveFilter
   );
 
-  // Calculate KPIs
-  const totalEmployees = payrolls.length;
-  const payrunsCompleted = payrolls.filter(p => p.status === 'processed').length;
-  const pendingLeaveApprovals = leaves.filter(l => l.status === 'pending').length;
-  const currentMonthPayroll = payrolls.reduce((sum, p) => sum + p.netPay, 0);
+  // Use stats from API (fallback to calculated values if stats not loaded)
+  const totalEmployees = stats.totalEmployees || payrolls.length;
+  const payrunsCompleted = stats.payruns || payrolls.filter(p => p.status === 'processed' || p.status === 'paid').length;
+  const pendingLeaveApprovals = stats.pendingLeaves || leaves.filter(l => l.status === 'pending').length;
+  const currentMonthPayroll = stats.currentMonthPayroll || payrolls.reduce((sum, p) => sum + p.netPay, 0);
 
   // Chart options
   const chartOptions = {
@@ -605,7 +665,18 @@ function DashboardPayrollOfficer() {
               </div>
             </div>
 
-            {/* NEW Button (Generate Payroll CTA) */}
+            {/* NEW Button (New Payslip CTA) */}
+            <motion.button
+              onClick={() => setShowNewPayslipModal(true)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="px-6 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 bg-primary hover:bg-blue-600 text-white shadow-lg shadow-primary/30"
+            >
+              <PlayCircle className="w-5 h-5" />
+              New Payslip
+            </motion.button>
+            
+            {/* Generate Payroll Button */}
             <motion.button
               onClick={processPayroll}
               disabled={processingPayroll}
@@ -614,7 +685,7 @@ function DashboardPayrollOfficer() {
               className={`px-6 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
                 processingPayroll
                   ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                  : 'bg-primary hover:bg-blue-600 text-white shadow-lg shadow-primary/30'
+                  : 'bg-purple-600 hover:bg-purple-700 text-white shadow-lg shadow-purple-500/30'
               }`}
             >
               {processingPayroll ? (
@@ -624,7 +695,7 @@ function DashboardPayrollOfficer() {
                 </>
               ) : (
                 <>
-                  <PlayCircle className="w-5 h-5" />
+                  <BarChart3 className="w-5 h-5" />
                   Generate Payroll
                 </>
               )}
@@ -697,7 +768,7 @@ function DashboardPayrollOfficer() {
             >
               <DollarSign className="w-8 h-8 text-primary mb-3" />
               <p className="text-gray-400 text-sm mb-1">Current Month Payroll</p>
-              <p className="text-3xl font-bold text-white">${(currentMonthPayroll / 1000).toFixed(1)}K</p>
+              <p className="text-3xl font-bold text-white">₹{(currentMonthPayroll / 1000).toFixed(1)}K</p>
             </motion.div>
           </div>
 
@@ -746,32 +817,44 @@ function DashboardPayrollOfficer() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredPayrolls.map((payroll, index) => (
-                          <motion.tr
-                            key={payroll.id}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: index * 0.05 }}
-                            className="border-b border-gray-800 hover:bg-gray-800/30 transition-colors"
-                          >
-                            <td className="py-3 px-4 text-white font-medium">{payroll.name}</td>
-                            <td className="py-3 px-4 text-gray-400">{payroll.department}</td>
-                            <td className="py-3 px-4 text-right text-white">${payroll.baseSalary.toLocaleString()}</td>
-                            <td className="py-3 px-4 text-right text-red-400">${payroll.deductions.toLocaleString()}</td>
-                            <td className="py-3 px-4 text-right text-green-400 font-semibold">${payroll.netPay.toLocaleString()}</td>
-                            <td className="py-3 px-4 text-center">
-                              <motion.button
-                                onClick={() => viewPayslip(payroll)}
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                className="px-3 py-1.5 bg-primary hover:bg-blue-600 text-white text-sm rounded-lg transition-all inline-flex items-center gap-1"
-                              >
-                                <Eye className="w-4 h-4" />
-                                View Payslip
-                              </motion.button>
+                        {filteredPayrolls.length === 0 ? (
+                          <tr>
+                            <td colSpan="6" className="py-12 text-center">
+                              <div className="flex flex-col items-center gap-3">
+                                <DollarSign className="w-16 h-16 text-gray-600" />
+                                <p className="text-gray-400 text-lg">No payroll records found</p>
+                                <p className="text-gray-500 text-sm">Click "New Payslip" to create employee payslips</p>
+                              </div>
                             </td>
-                          </motion.tr>
-                        ))}
+                          </tr>
+                        ) : (
+                          filteredPayrolls.map((payroll, index) => (
+                            <motion.tr
+                              key={payroll.id}
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: index * 0.05 }}
+                              className="border-b border-gray-800 hover:bg-gray-800/30 transition-colors"
+                            >
+                              <td className="py-3 px-4 text-white font-medium">{payroll.name}</td>
+                              <td className="py-3 px-4 text-gray-400">{payroll.department}</td>
+                              <td className="py-3 px-4 text-right text-white">₹{payroll.baseSalary.toLocaleString()}</td>
+                              <td className="py-3 px-4 text-right text-red-400">₹{payroll.deductions.toLocaleString()}</td>
+                              <td className="py-3 px-4 text-right text-green-400 font-semibold">₹{payroll.netPay.toLocaleString()}</td>
+                              <td className="py-3 px-4 text-center">
+                                <motion.button
+                                  onClick={() => viewPayslip(payroll)}
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  className="px-3 py-1.5 bg-primary hover:bg-blue-600 text-white text-sm rounded-lg transition-all inline-flex items-center gap-1"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  View Payslip
+                                </motion.button>
+                              </td>
+                            </motion.tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1070,96 +1153,26 @@ function DashboardPayrollOfficer() {
         </main>
       </div>
 
-      {/* PAYSLIP MODAL */}
-      <AnimatePresence>
-        {showPayslipModal && selectedPayslip && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setShowPayslipModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-white">Payslip Details</h3>
-                <motion.button
-                  onClick={() => setShowPayslipModal(false)}
-                  whileHover={{ scale: 1.1, rotate: 90 }}
-                  whileTap={{ scale: 0.9 }}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-all"
-                >
-                  <X className="w-5 h-5" />
-                </motion.button>
-              </div>
+      {/* PAYSLIP MODAL - View Payslip */}
+      <PayslipModal
+        show={showPayslipModal}
+        payslip={selectedPayslip}
+        onClose={() => setShowPayslipModal(false)}
+      />
 
-              <div className="space-y-6">
-                {/* Employee Info */}
-                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">
-                  <h4 className="text-white font-semibold text-lg mb-4">Employee Information</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-gray-400 text-sm">Name</p>
-                      <p className="text-white font-medium">{selectedPayslip.name}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 text-sm">Department</p>
-                      <p className="text-white font-medium">{selectedPayslip.department}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Salary Breakdown */}
-                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">
-                  <h4 className="text-white font-semibold text-lg mb-4">Salary Breakdown</h4>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Base Salary</span>
-                      <span className="text-white font-medium">${selectedPayslip.baseSalary.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-400">Deductions</span>
-                      <span className="text-red-400 font-medium">-${selectedPayslip.deductions.toLocaleString()}</span>
-                    </div>
-                    <div className="border-t border-gray-700 pt-3 mt-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-white font-semibold text-lg">Net Pay</span>
-                        <span className="text-green-400 font-bold text-xl">${selectedPayslip.netPay.toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-3">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="flex-1 px-6 py-3 bg-primary hover:bg-blue-600 text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2"
-                  >
-                    <Download className="w-5 h-5" />
-                    Download PDF
-                  </motion.button>
-                  <motion.button
-                    onClick={() => setShowPayslipModal(false)}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    className="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-semibold transition-all"
-                  >
-                    Close
-                  </motion.button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* NEW PAYSLIP MODAL - Create New Payslip */}
+      <NewPayslipModal
+        show={showNewPayslipModal}
+        onClose={() => setShowNewPayslipModal(false)}
+        onSubmit={(newPayslip) => {
+          // Add the newly created payslip to the list
+          setPayrolls(prev => [newPayslip, ...prev]);
+          // Refresh stats
+          fetchStats();
+          // Refresh payroll list
+          fetchPayrolls();
+        }}
+      />
 
       {/* PROFILE DROPDOWN (PORTAL) */}
       {showProfileDropdown && createPortal(

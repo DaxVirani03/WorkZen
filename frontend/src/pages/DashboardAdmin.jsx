@@ -18,13 +18,16 @@ import {
   Users, Clock, Calendar, DollarSign, FileText, Settings, 
   Search, UserPlus, LogOut, User as UserIcon, ChevronDown,
   CheckCircle, Plane, AlertCircle, X, Mail, Phone, MapPin,
-  Clock4, ClipboardCheck, FileEdit
+  Clock4, ClipboardCheck, FileEdit, Edit2, Trash2, Eye, 
+  Download, Filter, Plus, Check, XCircle, MoreVertical,
+  Building2, TrendingUp, Activity, Shield, Save, Ban
 } from 'lucide-react';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
-import { Line } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend } from 'chart.js';
+import { Line, Bar, Doughnut } from 'react-chartjs-2';
+import api from '../services/api';
 
 // Register Chart.js components
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend);
 
 function DashboardAdmin() {
   const navigate = useNavigate();
@@ -34,27 +37,93 @@ function DashboardAdmin() {
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [showEmployeePanel, setShowEmployeePanel] = useState(false);
+  const [showUserModal, setShowUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
   const avatarBtnRef = useRef(null);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+  
+  // Dynamic data states
+  const [loading, setLoading] = useState(true);
+  const [employees, setEmployees] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [dashboardStats, setDashboardStats] = useState(null);
+  const [attendanceData, setAttendanceData] = useState([]);
+  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [payrollRecords, setPayrollRecords] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [todayAttendance, setTodayAttendance] = useState([]);
+  
+  // Filter states
+  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
-  // Mock employee data with status indicators
-  const [employees] = useState([
-    { id: 1, name: 'Sarah Johnson', title: 'Senior Developer', avatar: null, status: 'present', email: 'sarah.j@workzen.com', phone: '+1 234-567-8901', department: 'Engineering' },
-    { id: 2, name: 'Michael Chen', title: 'Product Manager', avatar: null, status: 'present', email: 'michael.c@workzen.com', phone: '+1 234-567-8902', department: 'Product' },
-    { id: 3, name: 'Emily Rodriguez', title: 'UX Designer', avatar: null, status: 'leave', email: 'emily.r@workzen.com', phone: '+1 234-567-8903', department: 'Design' },
-    { id: 4, name: 'James Wilson', title: 'HR Manager', avatar: null, status: 'present', email: 'james.w@workzen.com', phone: '+1 234-567-8904', department: 'Human Resources' },
-    { id: 5, name: 'Anna Kumar', title: 'Backend Developer', avatar: null, status: 'absent', email: 'anna.k@workzen.com', phone: '+1 234-567-8905', department: 'Engineering' },
-    { id: 6, name: 'David Park', title: 'DevOps Engineer', avatar: null, status: 'present', email: 'david.p@workzen.com', phone: '+1 234-567-8906', department: 'Engineering' },
-    { id: 7, name: 'Lisa Thompson', title: 'Marketing Lead', avatar: null, status: 'present', email: 'lisa.t@workzen.com', phone: '+1 234-567-8907', department: 'Marketing' },
-    { id: 8, name: 'Robert Martinez', title: 'Sales Executive', avatar: null, status: 'leave', email: 'robert.m@workzen.com', phone: '+1 234-567-8908', department: 'Sales' },
-    { id: 9, name: 'Jennifer Lee', title: 'QA Engineer', avatar: null, status: 'present', email: 'jennifer.l@workzen.com', phone: '+1 234-567-8909', department: 'Engineering' },
-  ]);
+  // Fetch all data
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch dashboard overview
+      const overviewData = await api.dashboard.getOverview();
+      setDashboardStats(overviewData.data || overviewData);
+      
+      // Fetch all users (which includes employee data)
+      const usersData = await api.users.getAll();
+      const allUsers = usersData.data || [];
+      setUsers(allUsers);
+      
+      // Set employees from users (they're the same now)
+      setEmployees(allUsers);
+      
+      // Fetch today's attendance
+      const todayData = await api.attendance.getToday();
+      setTodayAttendance(todayData.data || []);
+      
+      // Fetch pending leave requests
+      const pendingData = await api.leaveRequests.getPending();
+      setLeaveRequests(pendingData.data || []);
+      
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      // Set empty arrays to prevent errors
+      setUsers([]);
+      setEmployees([]);
+      setTodayAttendance([]);
+      setLeaveRequests([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // Mock pending leave requests
-  const [pendingLeaves] = useState([
-    { id: 1, employeeName: 'Emily Rodriguez', type: 'Vacation', dates: 'Dec 10-14', days: 5 },
-    { id: 2, employeeName: 'Robert Martinez', type: 'Sick Leave', dates: 'Dec 8', days: 1 },
-  ]);
+  // Fetch attendance data
+  const fetchAttendanceData = async () => {
+    try {
+      const data = await api.attendance.getAll({ limit: 100 });
+      setAttendanceData(data.data?.attendance || data.data || []);
+    } catch (error) {
+      console.error('Error fetching attendance:', error);
+    }
+  };
+
+  // Fetch payroll data
+  const fetchPayrollData = async () => {
+    try {
+      const data = await api.payroll.getAll({ limit: 100 });
+      setPayrollRecords(data.data?.payroll || data.data || []);
+    } catch (error) {
+      console.error('Error fetching payroll:', error);
+    }
+  };
+
+  // Fetch reports
+  const fetchReports = async () => {
+    try {
+      const data = await api.reports.getAll();
+      setReports(data.data?.reports || data.data || []);
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+    }
+  };
 
   useEffect(() => {
     // Check authentication
@@ -70,12 +139,23 @@ function DashboardAdmin() {
     if (userData) {
       setUser(JSON.parse(userData));
     }
+
+    fetchDashboardData();
   }, [navigate]);
 
+  // Fetch specific data based on active menu
+  useEffect(() => {
+    if (activeMenu === 'Attendance') {
+      fetchAttendanceData();
+    } else if (activeMenu === 'Payroll') {
+      fetchPayrollData();
+    } else if (activeMenu === 'Reports') {
+      fetchReports();
+    }
+  }, [activeMenu]);
+
   const handleLogout = () => {
-    localStorage.removeItem('workzen_token');
-    localStorage.removeItem('workzen_role');
-    localStorage.removeItem('workzen_user');
+    api.auth.logout();
     navigate('/login');
   };
 
@@ -89,26 +169,138 @@ function DashboardAdmin() {
     setShowEmployeePanel(true);
   };
 
+  // User management functions
+  const handleCreateUser = () => {
+    setEditingUser(null);
+    setShowUserModal(true);
+  };
+
+  const handleEditUser = (user) => {
+    setEditingUser(user);
+    setShowUserModal(true);
+  };
+
+  const handleDeleteUser = async (userId) => {
+    if (!confirm('Are you sure you want to delete this user?')) return;
+    
+    try {
+      await api.users.delete(userId);
+      fetchDashboardData();
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('Failed to delete user');
+    }
+  };
+
+  const handleUpdateUserRole = async (userId, newRole) => {
+    try {
+      await api.users.updateRole(userId, newRole);
+      fetchDashboardData();
+    } catch (error) {
+      console.error('Error updating role:', error);
+      alert('Failed to update role');
+    }
+  };
+
+  const handleToggleUserStatus = async (userId) => {
+    try {
+      await api.users.toggleStatus(userId);
+      fetchDashboardData();
+    } catch (error) {
+      console.error('Error toggling status:', error);
+      alert('Failed to toggle status');
+    }
+  };
+
+  // Leave approval functions
+  const handleApproveLeave = async (leaveId) => {
+    try {
+      await api.leaveRequests.approve(leaveId, 'Approved by admin');
+      fetchDashboardData();
+    } catch (error) {
+      console.error('Error approving leave:', error);
+      alert('Failed to approve leave');
+    }
+  };
+
+  const handleRejectLeave = async (leaveId) => {
+    const reason = prompt('Enter rejection reason:');
+    if (!reason) return;
+    
+    try {
+      await api.leaveRequests.reject(leaveId, reason);
+      fetchDashboardData();
+    } catch (error) {
+      console.error('Error rejecting leave:', error);
+      alert('Failed to reject leave');
+    }
+  };
+
   // Calculate summary metrics
+  const getEmployeeStatus = (employee) => {
+    const today = todayAttendance.find(a => 
+      a.employee?._id === employee._id || a.employee === employee._id
+    );
+    
+    if (!today) return 'absent';
+    return today.status || 'present';
+  };
+
   const totalEmployees = employees.length;
-  const presentToday = employees.filter(e => e.status === 'present').length;
-  const onLeaveToday = employees.filter(e => e.status === 'leave').length;
-  const absentToday = employees.filter(e => e.status === 'absent').length;
-  const monthlyPayroll = 285000; // Mock data
+  const presentToday = todayAttendance.filter(a => a.status === 'present').length;
+  const onLeaveToday = leaveRequests.filter(l => {
+    const today = new Date();
+    const from = new Date(l.from);
+    const to = new Date(l.to);
+    return l.status === 'Approved' && today >= from && today <= to;
+  }).length;
+  const absentToday = totalEmployees - presentToday - onLeaveToday;
+  
+  const monthlyPayroll = payrollRecords.reduce((sum, p) => sum + (p.netPay || 0), 0);
 
-  // Filter employees based on search
-  const filteredEmployees = employees.filter(emp => 
-    emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    emp.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filter employees based on search and filters
+  const filteredEmployees = employees.filter(emp => {
+    const matchesSearch = searchQuery === '' || 
+      `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.position?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.email?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesDepartment = departmentFilter === 'all' || emp.department === departmentFilter;
+    
+    return matchesSearch && matchesDepartment;
+  });
 
-  // Chart data - Attendance trend for past 7 days
+  // Chart data - Attendance trend for past 7 days (dynamic)
+  const getLast7Days = () => {
+    const days = [];
+    const labels = [];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      days.push(date);
+      labels.push(date.toLocaleDateString('en-US', { weekday: 'short' }));
+    }
+    return { days, labels };
+  };
+
+  const { days: last7Days, labels: dayLabels } = getLast7Days();
+  
+  const attendancePercentages = last7Days.map(day => {
+    const dayAttendance = todayAttendance.filter(a => {
+      const attDate = new Date(a.date);
+      return attDate.toDateString() === day.toDateString();
+    });
+    
+    const presentCount = dayAttendance.filter(a => a.status === 'present').length;
+    return totalEmployees > 0 ? Math.round((presentCount / totalEmployees) * 100) : 0;
+  });
+
   const attendanceTrendData = {
-    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    labels: dayLabels,
     datasets: [
       {
         label: 'Attendance %',
-        data: [95, 98, 92, 96, 94, 0, 0], // Mock data
+        data: attendancePercentages,
         borderColor: '#005eb8',
         backgroundColor: 'rgba(0, 94, 184, 0.1)',
         tension: 0.4,
@@ -187,6 +379,17 @@ function DashboardAdmin() {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white flex items-center gap-3">
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+          Loading Dashboard...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-black flex">
       {/* ==================== LEFT SIDEBAR ==================== */}
@@ -250,10 +453,11 @@ function DashboardAdmin() {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
+                onClick={handleCreateUser}
                 className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"
               >
                 <UserPlus className="w-4 h-4" />
-                NEW
+                NEW USER
               </motion.button>
 
               {/* Profile Avatar Dropdown */}
@@ -396,7 +600,7 @@ function DashboardAdmin() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-gray-400 text-sm">Payroll This Month</p>
-                    <h3 className="text-3xl font-bold text-accent mt-2">₹{monthlyPayroll.toLocaleString()}</h3>
+                    <h3 className="text-3xl font-bold text-accent mt-2">₹{(monthlyPayroll / 1000).toFixed(1)}k</h3>
                   </div>
                   <div className="w-12 h-12 bg-accent/20 rounded-lg flex items-center justify-center">
                     <DollarSign className="w-6 h-6 text-accent" />
@@ -427,16 +631,40 @@ function DashboardAdmin() {
                 className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"
               >
                 <h3 className="text-lg font-semibold text-white mb-4">Pending Approvals</h3>
-                <div className="space-y-3">
-                  {pendingLeaves.map((leave) => (
-                    <div key={leave.id} className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                      <p className="text-white font-medium text-sm">{leave.employeeName}</p>
-                      <p className="text-gray-400 text-xs mt-1">{leave.type} • {leave.dates}</p>
-                      <p className="text-gray-500 text-xs">{leave.days} day{leave.days > 1 ? 's' : ''}</p>
+                <div className="space-y-3 max-h-60 overflow-y-auto">
+                  {leaveRequests.filter(l => l.status === 'Pending').slice(0, 5).map((leave) => (
+                    <div key={leave._id} className="p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="text-white font-medium text-sm">
+                            {leave.userId?.firstName} {leave.userId?.lastName}
+                          </p>
+                          <p className="text-gray-400 text-xs mt-1">
+                            {leave.type} • {new Date(leave.from).toLocaleDateString()} - {new Date(leave.to).toLocaleDateString()}
+                          </p>
+                          <p className="text-gray-500 text-xs">{leave.duration || 0} day(s)</p>
+                        </div>
+                        <div className="flex gap-1 ml-2">
+                          <button
+                            onClick={() => handleApproveLeave(leave._id)}
+                            className="p-1 hover:bg-green-500/20 rounded text-green-500 transition-all"
+                            title="Approve"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleRejectLeave(leave._id)}
+                            className="p-1 hover:bg-red-500/20 rounded text-red-500 transition-all"
+                            title="Reject"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ))}
-                  {pendingLeaves.length === 0 && (
-                    <p className="text-gray-500 text-sm">No pending approvals</p>
+                  {leaveRequests.filter(l => l.status === 'Pending').length === 0 && (
+                    <p className="text-gray-500 text-sm text-center py-4">No pending approvals</p>
                   )}
                 </div>
               </motion.div>
@@ -475,31 +703,37 @@ function DashboardAdmin() {
               </h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredEmployees.map((employee, index) => (
-                  <motion.div
-                    key={employee.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 * index }}
-                    whileHover={{ y: -4, boxShadow: '0 20px 40px rgba(0, 94, 184, 0.2)' }}
-                    onClick={() => handleEmployeeCardClick(employee)}
-                    className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6 cursor-pointer transition-all relative"
-                  >
-                    {/* Status Indicator - Top Right */}
-                    <div className="absolute top-4 right-4">
-                      <StatusIndicator status={employee.status} />
-                    </div>
+                {filteredEmployees.map((employee, index) => {
+                  const employeeStatus = getEmployeeStatus(employee);
+                  const fullName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim();
+                  
+                  return (
+                    <motion.div
+                      key={employee._id || employee.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1 * Math.min(index, 9) }}
+                      whileHover={{ y: -4, boxShadow: '0 20px 40px rgba(0, 94, 184, 0.2)' }}
+                      onClick={() => handleEmployeeCardClick(employee)}
+                      className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6 cursor-pointer transition-all relative"
+                    >
+                      {/* Status Indicator - Top Right */}
+                      <div className="absolute top-4 right-4">
+                        <StatusIndicator status={employeeStatus} />
+                      </div>
 
-                    {/* Employee Avatar */}
-                    <div className="w-20 h-20 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-2xl mb-4">
-                      {(employee.name || 'Unknown User').split(' ').map(n => n[0]).join('').toUpperCase()}
-                    </div>
+                      {/* Employee Avatar */}
+                      <div className="w-20 h-20 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-2xl mb-4">
+                        {(fullName || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                      </div>
 
-                    {/* Employee Info */}
-                    <h3 className="text-lg font-semibold text-white">{employee.name}</h3>
-                    <p className="text-gray-400 text-sm mt-1">{employee.title}</p>
-                  </motion.div>
-                ))}
+                      {/* Employee Info */}
+                      <h3 className="text-lg font-semibold text-white">{fullName}</h3>
+                      <p className="text-gray-400 text-sm mt-1">{employee.position || employee.title}</p>
+                      <p className="text-gray-500 text-xs mt-1">{employee.department}</p>
+                    </motion.div>
+                  );
+                })}
               </div>
 
               {/* No Results */}
@@ -515,9 +749,99 @@ function DashboardAdmin() {
             {/* ==================== ATTENDANCE PANEL ==================== */}
             {activeMenu === 'Attendance' && (
               <div className="space-y-6">
-                <h2 className="text-2xl font-bold text-white">Attendance Management</h2>
-                <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
-                  <p className="text-gray-400">Attendance management interface - Coming soon</p>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-white">Attendance Management</h2>
+                  <div className="flex gap-3">
+                    <select
+                      value={departmentFilter}
+                      onChange={(e) => setDepartmentFilter(e.target.value)}
+                      className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="all">All Departments</option>
+                      <option value="HR">HR</option>
+                      <option value="IT">IT</option>
+                      <option value="Finance">Finance</option>
+                      <option value="Engineering">Engineering</option>
+                      <option value="Marketing">Marketing</option>
+                      <option value="Sales">Sales</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Attendance Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-4">
+                    <p className="text-gray-400 text-sm">Total Today</p>
+                    <p className="text-2xl font-bold text-white mt-1">{todayAttendance.length}</p>
+                  </div>
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-4">
+                    <p className="text-gray-400 text-sm">Present</p>
+                    <p className="text-2xl font-bold text-green-500 mt-1">{presentToday}</p>
+                  </div>
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-4">
+                    <p className="text-gray-400 text-sm">On Leave</p>
+                    <p className="text-2xl font-bold text-blue-400 mt-1">{onLeaveToday}</p>
+                  </div>
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-4">
+                    <p className="text-gray-400 text-sm">Absent</p>
+                    <p className="text-2xl font-bold text-yellow-500 mt-1">{absentToday}</p>
+                  </div>
+                </div>
+
+                {/* Today's Attendance Table */}
+                <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="p-6 border-b border-gray-800">
+                    <h3 className="text-lg font-semibold text-white">Today's Attendance</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-800/50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Employee</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Check In</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Check Out</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Hours</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-800">
+                        {todayAttendance.slice(0, 10).map((attendance) => (
+                          <tr key={attendance._id} className="hover:bg-gray-800/30 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-white">
+                                {attendance.employee?.firstName} {attendance.employee?.lastName}
+                              </div>
+                              <div className="text-sm text-gray-400">{attendance.employee?.department}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                              {attendance.checkIn?.time ? new Date(attendance.checkIn.time).toLocaleTimeString() : '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                              {attendance.checkOut?.time ? new Date(attendance.checkOut.time).toLocaleTimeString() : '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                              {attendance.workHours ? `${attendance.workHours.toFixed(1)}h` : '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                attendance.status === 'present' ? 'bg-green-500/20 text-green-400' :
+                                attendance.status === 'late' ? 'bg-yellow-500/20 text-yellow-400' :
+                                attendance.status === 'absent' ? 'bg-red-500/20 text-red-400' :
+                                'bg-gray-500/20 text-gray-400'
+                              }`}>
+                                {attendance.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {todayAttendance.length === 0 && (
+                      <div className="text-center py-12 text-gray-400">
+                        No attendance records for today
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -525,9 +849,130 @@ function DashboardAdmin() {
             {/* ==================== TIME OFF PANEL ==================== */}
             {activeMenu === 'Time Off' && (
               <div className="space-y-6">
-                <h2 className="text-2xl font-bold text-white">Time Off Management</h2>
-                <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
-                  <p className="text-gray-400">Time off requests and approvals - Coming soon</p>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-white">Time Off Management</h2>
+                  <div className="flex gap-3">
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="all">All Status</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Approved">Approved</option>
+                      <option value="Rejected">Rejected</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Leave Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-4">
+                    <p className="text-gray-400 text-sm">Total Requests</p>
+                    <p className="text-2xl font-bold text-white mt-1">{leaveRequests.length}</p>
+                  </div>
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-4">
+                    <p className="text-gray-400 text-sm">Pending</p>
+                    <p className="text-2xl font-bold text-yellow-500 mt-1">
+                      {leaveRequests.filter(l => l.status === 'Pending').length}
+                    </p>
+                  </div>
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-4">
+                    <p className="text-gray-400 text-sm">Approved</p>
+                    <p className="text-2xl font-bold text-green-500 mt-1">
+                      {leaveRequests.filter(l => l.status === 'Approved').length}
+                    </p>
+                  </div>
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-4">
+                    <p className="text-gray-400 text-sm">Rejected</p>
+                    <p className="text-2xl font-bold text-red-500 mt-1">
+                      {leaveRequests.filter(l => l.status === 'Rejected').length}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Leave Requests Table */}
+                <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="p-6 border-b border-gray-800">
+                    <h3 className="text-lg font-semibold text-white">Leave Requests</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-800/50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Employee</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Type</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">From - To</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Days</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Reason</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-800">
+                        {leaveRequests
+                          .filter(l => statusFilter === 'all' || l.status === statusFilter)
+                          .slice(0, 20)
+                          .map((leave) => (
+                            <tr key={leave._id} className="hover:bg-gray-800/30 transition-colors">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-white">
+                                  {leave.userId?.firstName} {leave.userId?.lastName}
+                                </div>
+                                <div className="text-sm text-gray-400">{leave.userId?.email}</div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                {leave.type}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                {new Date(leave.from).toLocaleDateString()} - {new Date(leave.to).toLocaleDateString()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                {leave.duration || Math.ceil((new Date(leave.to) - new Date(leave.from)) / (1000 * 60 * 60 * 24)) + 1}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-gray-300 max-w-xs truncate">
+                                {leave.reason}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                  leave.status === 'Approved' ? 'bg-green-500/20 text-green-400' :
+                                  leave.status === 'Pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                                  leave.status === 'Rejected' ? 'bg-red-500/20 text-red-400' :
+                                  'bg-gray-500/20 text-gray-400'
+                                }`}>
+                                  {leave.status}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                {leave.status === 'Pending' && (
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => handleApproveLeave(leave._id)}
+                                      className="p-1 hover:bg-green-500/20 rounded text-green-500 transition-all"
+                                      title="Approve"
+                                    >
+                                      <Check className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleRejectLeave(leave._id)}
+                                      className="p-1 hover:bg-red-500/20 rounded text-red-500 transition-all"
+                                      title="Reject"
+                                    >
+                                      <XCircle className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                    {leaveRequests.filter(l => statusFilter === 'all' || l.status === statusFilter).length === 0 && (
+                      <div className="text-center py-12 text-gray-400">
+                        No leave requests found
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -535,9 +980,111 @@ function DashboardAdmin() {
             {/* ==================== PAYROLL PANEL ==================== */}
             {activeMenu === 'Payroll' && (
               <div className="space-y-6">
-                <h2 className="text-2xl font-bold text-white">Payroll Management</h2>
-                <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
-                  <p className="text-gray-400">Payroll processing and management - Coming soon</p>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-white">Payroll Management</h2>
+                  <button
+                    onClick={() => alert('Generate payroll functionality')}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Generate Payroll
+                  </button>
+                </div>
+
+                {/* Payroll Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-4">
+                    <p className="text-gray-400 text-sm">Total Records</p>
+                    <p className="text-2xl font-bold text-white mt-1">{payrollRecords.length}</p>
+                  </div>
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-4">
+                    <p className="text-gray-400 text-sm">Total Amount</p>
+                    <p className="text-2xl font-bold text-accent mt-1">
+                      ₹{(monthlyPayroll / 1000).toFixed(1)}k
+                    </p>
+                  </div>
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-4">
+                    <p className="text-gray-400 text-sm">Processed</p>
+                    <p className="text-2xl font-bold text-green-500 mt-1">
+                      {payrollRecords.filter(p => p.paymentStatus === 'paid').length}
+                    </p>
+                  </div>
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-4">
+                    <p className="text-gray-400 text-sm">Pending</p>
+                    <p className="text-2xl font-bold text-yellow-500 mt-1">
+                      {payrollRecords.filter(p => p.paymentStatus === 'pending').length}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Payroll Table */}
+                <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="p-6 border-b border-gray-800">
+                    <h3 className="text-lg font-semibold text-white">Payroll Records</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-800/50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Employee</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Period</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Basic Salary</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Gross</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Net Pay</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-800">
+                        {payrollRecords.slice(0, 20).map((payroll) => (
+                          <tr key={payroll._id} className="hover:bg-gray-800/30 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-white">
+                                {payroll.employee?.firstName} {payroll.employee?.lastName}
+                              </div>
+                              <div className="text-sm text-gray-400">{payroll.employee?.employeeId}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                              {payroll.payPeriod?.startDate && new Date(payroll.payPeriod.startDate).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                              ₹{payroll.basicSalary?.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                              ₹{payroll.grossEarnings?.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-accent">
+                              ₹{payroll.netPay?.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                payroll.paymentStatus === 'paid' ? 'bg-green-500/20 text-green-400' :
+                                payroll.paymentStatus === 'pending' ? 'bg-yellow-500/20 text-yellow-400' :
+                                payroll.paymentStatus === 'processing' ? 'bg-blue-500/20 text-blue-400' :
+                                'bg-gray-500/20 text-gray-400'
+                              }`}>
+                                {payroll.paymentStatus}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <button
+                                onClick={() => alert('View payslip')}
+                                className="p-1 hover:bg-primary/20 rounded text-primary transition-all"
+                                title="View Payslip"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {payrollRecords.length === 0 && (
+                      <div className="text-center py-12 text-gray-400">
+                        No payroll records found
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -545,9 +1092,124 @@ function DashboardAdmin() {
             {/* ==================== REPORTS PANEL ==================== */}
             {activeMenu === 'Reports' && (
               <div className="space-y-6">
-                <h2 className="text-2xl font-bold text-white">Reports & Analytics</h2>
-                <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
-                  <p className="text-gray-400">Reports and analytics dashboard - Coming soon</p>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-white">Reports & Analytics</h2>
+                  <button
+                    onClick={() => alert('Generate new report')}
+                    className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg transition-all"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Generate Report
+                  </button>
+                </div>
+
+                {/* Report Types Quick Actions */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <button
+                    onClick={() => alert('Generate attendance report')}
+                    className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6 hover:border-primary transition-all text-left"
+                  >
+                    <Clock className="w-8 h-8 text-primary mb-3" />
+                    <h3 className="text-white font-semibold">Attendance Report</h3>
+                    <p className="text-gray-400 text-sm mt-1">Generate attendance analytics</p>
+                  </button>
+                  <button
+                    onClick={() => alert('Generate leave report')}
+                    className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6 hover:border-primary transition-all text-left"
+                  >
+                    <Calendar className="w-8 h-8 text-blue-400 mb-3" />
+                    <h3 className="text-white font-semibold">Leave Report</h3>
+                    <p className="text-gray-400 text-sm mt-1">Analyze leave patterns</p>
+                  </button>
+                  <button
+                    onClick={() => alert('Generate payroll report')}
+                    className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6 hover:border-primary transition-all text-left"
+                  >
+                    <DollarSign className="w-8 h-8 text-accent mb-3" />
+                    <h3 className="text-white font-semibold">Payroll Report</h3>
+                    <p className="text-gray-400 text-sm mt-1">View payroll summaries</p>
+                  </button>
+                  <button
+                    onClick={() => alert('Generate employee report')}
+                    className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6 hover:border-primary transition-all text-left"
+                  >
+                    <Users className="w-8 h-8 text-green-400 mb-3" />
+                    <h3 className="text-white font-semibold">Employee Report</h3>
+                    <p className="text-gray-400 text-sm mt-1">Employee analytics</p>
+                  </button>
+                </div>
+
+                {/* Recent Reports */}
+                <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="p-6 border-b border-gray-800">
+                    <h3 className="text-lg font-semibold text-white">Recent Reports</h3>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-800/50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Name</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Type</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Generated By</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Date</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-800">
+                        {reports.slice(0, 10).map((report) => (
+                          <tr key={report._id} className="hover:bg-gray-800/30 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-white">{report.name}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary/20 text-primary">
+                                {report.type}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                              {report.generatedBy?.firstName} {report.generatedBy?.lastName}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                              {report.generatedAt && new Date(report.generatedAt).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                report.status === 'generated' ? 'bg-green-500/20 text-green-400' :
+                                report.status === 'draft' ? 'bg-yellow-500/20 text-yellow-400' :
+                                'bg-gray-500/20 text-gray-400'
+                              }`}>
+                                {report.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => alert('View report')}
+                                  className="p-1 hover:bg-primary/20 rounded text-primary transition-all"
+                                  title="View"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => alert('Download report')}
+                                  className="p-1 hover:bg-green-500/20 rounded text-green-400 transition-all"
+                                  title="Download"
+                                >
+                                  <Download className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {reports.length === 0 && (
+                      <div className="text-center py-12 text-gray-400">
+                        No reports generated yet. Create your first report!
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -555,9 +1217,170 @@ function DashboardAdmin() {
             {/* ==================== SETTINGS PANEL ==================== */}
             {activeMenu === 'Settings' && (
               <div className="space-y-6">
-                <h2 className="text-2xl font-bold text-white">Settings</h2>
+                <h2 className="text-2xl font-bold text-white">Settings & User Management</h2>
+
+                {/* Settings Tabs */}
                 <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
-                  <p className="text-gray-400">System settings and configuration - Coming soon</p>
+                  <div className="space-y-6">
+                    {/* User Management Section */}
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-white">User Management</h3>
+                        <button
+                          onClick={handleCreateUser}
+                          className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg transition-all"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          Add User
+                        </button>
+                      </div>
+
+                      {/* Users Table */}
+                      <div className="border border-gray-700 rounded-lg overflow-hidden">
+                        <table className="w-full">
+                          <thead className="bg-gray-800/50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">User</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Email</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Role</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Department</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-700">
+                            {users.map((userItem) => (
+                              <tr key={userItem._id || userItem.id} className="hover:bg-gray-800/30 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-sm mr-3">
+                                      {(userItem.firstName || userItem.name || 'U').charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                      <div className="text-sm font-medium text-white">
+                                        {userItem.firstName && userItem.lastName 
+                                          ? `${userItem.firstName} ${userItem.lastName}` 
+                                          : userItem.name}
+                                      </div>
+                                      <div className="text-sm text-gray-400">{userItem.userId || userItem.employeeId}</div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                  {userItem.email}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <select
+                                    value={userItem.role}
+                                    onChange={(e) => handleUpdateUserRole(userItem._id || userItem.id, e.target.value)}
+                                    className="px-3 py-1 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                                  >
+                                    <option value="Admin">Admin</option>
+                                    <option value="HR Officer">HR Officer</option>
+                                    <option value="Payroll Officer">Payroll Officer</option>
+                                    <option value="Employee">Employee</option>
+                                  </select>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                                  {userItem.department || '-'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <button
+                                    onClick={() => handleToggleUserStatus(userItem._id || userItem.id)}
+                                    className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full cursor-pointer ${
+                                      userItem.isActive !== false
+                                        ? 'bg-green-500/20 text-green-400'
+                                        : 'bg-red-500/20 text-red-400'
+                                    }`}
+                                  >
+                                    {userItem.isActive !== false ? 'Active' : 'Inactive'}
+                                  </button>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => handleEditUser(userItem)}
+                                      className="p-1 hover:bg-primary/20 rounded text-primary transition-all"
+                                      title="Edit"
+                                    >
+                                      <Edit2 className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteUser(userItem._id || userItem.id)}
+                                      className="p-1 hover:bg-red-500/20 rounded text-red-500 transition-all"
+                                      title="Delete"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        {users.length === 0 && (
+                          <div className="text-center py-12 text-gray-400">
+                            No users found
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Role Descriptions */}
+                    <div className="mt-8">
+                      <h3 className="text-lg font-semibold text-white mb-4">Role Descriptions</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Shield className="w-5 h-5 text-red-400" />
+                            <h4 className="text-white font-semibold">Admin</h4>
+                          </div>
+                          <ul className="text-sm text-gray-300 space-y-1">
+                            <li>• Full system access</li>
+                            <li>• Manage all users and roles</li>
+                            <li>• CRUD operations on all modules</li>
+                            <li>• Oversee all activities</li>
+                          </ul>
+                        </div>
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Users className="w-5 h-5 text-blue-400" />
+                            <h4 className="text-white font-semibold">HR Officer</h4>
+                          </div>
+                          <ul className="text-sm text-gray-300 space-y-1">
+                            <li>• Manage employee records</li>
+                            <li>• Approve/reject leave requests</li>
+                            <li>• Track attendance</li>
+                            <li>• Generate reports</li>
+                          </ul>
+                        </div>
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <DollarSign className="w-5 h-5 text-accent" />
+                            <h4 className="text-white font-semibold">Payroll Officer</h4>
+                          </div>
+                          <ul className="text-sm text-gray-300 space-y-1">
+                            <li>• Process payroll</li>
+                            <li>• Manage salary records</li>
+                            <li>• Generate payslips</li>
+                            <li>• View payroll reports</li>
+                          </ul>
+                        </div>
+                        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <UserIcon className="w-5 h-5 text-green-400" />
+                            <h4 className="text-white font-semibold">Employee</h4>
+                          </div>
+                          <ul className="text-sm text-gray-300 space-y-1">
+                            <li>• View own records</li>
+                            <li>• Request leave</li>
+                            <li>• Mark attendance</li>
+                            <li>• View payslips</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -602,13 +1425,15 @@ function DashboardAdmin() {
                 {/* Avatar & Name */}
                 <div className="text-center">
                   <div className="w-24 h-24 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-3xl mx-auto mb-4">
-                    {(selectedEmployee.name || 'Unknown User').split(' ').map(n => n[0]).join('').toUpperCase()}
+                    {`${selectedEmployee.firstName || ''} ${selectedEmployee.lastName || ''}`.trim().split(' ').map(n => n[0]).join('').toUpperCase() || 'U'}
                   </div>
-                  <h4 className="text-xl font-bold text-white">{selectedEmployee.name}</h4>
-                  <p className="text-gray-400 text-sm mt-1">{selectedEmployee.title}</p>
+                  <h4 className="text-xl font-bold text-white">
+                    {selectedEmployee.firstName} {selectedEmployee.lastName}
+                  </h4>
+                  <p className="text-gray-400 text-sm mt-1">{selectedEmployee.position || selectedEmployee.title}</p>
                   <div className="flex items-center justify-center gap-2 mt-2">
-                    <StatusIndicator status={selectedEmployee.status} />
-                    <span className="text-sm text-gray-400 capitalize">{selectedEmployee.status}</span>
+                    <StatusIndicator status={getEmployeeStatus(selectedEmployee)} />
+                    <span className="text-sm text-gray-400 capitalize">{getEmployeeStatus(selectedEmployee)}</span>
                   </div>
                 </div>
 
@@ -620,11 +1445,33 @@ function DashboardAdmin() {
                   </div>
                   <div className="flex items-center gap-3 text-gray-300">
                     <Phone className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm">{selectedEmployee.phone}</span>
+                    <span className="text-sm">{selectedEmployee.phone || 'N/A'}</span>
                   </div>
                   <div className="flex items-center gap-3 text-gray-300">
                     <MapPin className="w-4 h-4 text-gray-400" />
                     <span className="text-sm">{selectedEmployee.department}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-gray-300">
+                    <Building2 className="w-4 h-4 text-gray-400" />
+                    <span className="text-sm">{selectedEmployee.employeeId}</span>
+                  </div>
+                </div>
+
+                {/* Employee Stats */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                    <p className="text-gray-400 text-xs">Employment Type</p>
+                    <p className="text-white font-semibold text-sm mt-1">
+                      {selectedEmployee.employmentType || 'Full-time'}
+                    </p>
+                  </div>
+                  <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+                    <p className="text-gray-400 text-xs">Start Date</p>
+                    <p className="text-white font-semibold text-sm mt-1">
+                      {selectedEmployee.startDate 
+                        ? new Date(selectedEmployee.startDate).toLocaleDateString() 
+                        : 'N/A'}
+                    </p>
                   </div>
                 </div>
 
@@ -632,21 +1479,228 @@ function DashboardAdmin() {
                 <div className="space-y-3">
                   <h5 className="text-sm font-semibold text-gray-400 uppercase">Quick Actions</h5>
                   
-                  <button className="w-full flex items-center gap-3 px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-all text-left">
+                  <button 
+                    onClick={() => alert('Mark attendance functionality')}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-all text-left"
+                  >
                     <Clock4 className="w-4 h-4 text-primary" />
-                    <span className="text-white text-sm">Mark Attendance</span>
+                    <span className="text-white text-sm">View Attendance</span>
                   </button>
 
-                  <button className="w-full flex items-center gap-3 px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-all text-left">
+                  <button 
+                    onClick={() => alert('Edit employee functionality')}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-all text-left"
+                  >
                     <FileEdit className="w-4 h-4 text-primary" />
-                    <span className="text-white text-sm">Add Correction</span>
+                    <span className="text-white text-sm">Edit Details</span>
                   </button>
 
-                  <button className="w-full flex items-center gap-3 px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-all text-left">
+                  <button 
+                    onClick={() => alert('View payslip functionality')}
+                    className="w-full flex items-center gap-3 px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg transition-all text-left"
+                  >
                     <ClipboardCheck className="w-4 h-4 text-primary" />
                     <span className="text-white text-sm">View Payslip</span>
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* ==================== USER CREATE/EDIT MODAL ==================== */}
+      <AnimatePresence>
+        {showUserModal && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowUserModal(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            />
+
+            {/* Modal */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+            >
+              <div className="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl w-full max-w-2xl pointer-events-auto overflow-hidden">
+                {/* Modal Header */}
+                <div className="p-6 border-b border-gray-800 flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-white">
+                    {editingUser ? 'Edit User' : 'Create New User'}
+                  </h3>
+                  <button
+                    onClick={() => setShowUserModal(false)}
+                    className="p-2 hover:bg-gray-800 rounded-lg transition-all"
+                  >
+                    <X className="w-5 h-5 text-gray-400" />
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.target);
+                    const userData = Object.fromEntries(formData);
+                    
+                    if (editingUser) {
+                      api.users.update(editingUser._id || editingUser.id, userData)
+                        .then(() => {
+                          setShowUserModal(false);
+                          fetchDashboardData();
+                          alert('User updated successfully!');
+                        })
+                        .catch(err => {
+                          console.error('Error updating user:', err);
+                          alert(`Failed to update user: ${err.message || 'Please check if the backend server is running.'}`);
+                        });
+                    } else {
+                      api.users.create(userData)
+                        .then(() => {
+                          setShowUserModal(false);
+                          fetchDashboardData();
+                          alert('User created successfully!');
+                        })
+                        .catch(err => {
+                          console.error('Error creating user:', err);
+                          alert(`Failed to create user: ${err.message || 'Please check if the backend server is running.'}`);
+                        });
+                    }
+                  }}
+                  className="p-6 space-y-4 max-h-[70vh] overflow-y-auto"
+                >
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        First Name *
+                      </label>
+                      <input
+                        type="text"
+                        name="firstName"
+                        defaultValue={editingUser?.firstName || ''}
+                        required
+                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Last Name *
+                      </label>
+                      <input
+                        type="text"
+                        name="lastName"
+                        defaultValue={editingUser?.lastName || ''}
+                        required
+                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Email *
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      defaultValue={editingUser?.email || ''}
+                      required
+                      className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+
+                  {!editingUser && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Password *
+                      </label>
+                      <input
+                        type="password"
+                        name="password"
+                        required
+                        minLength={6}
+                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Role *
+                      </label>
+                      <select
+                        name="role"
+                        defaultValue={editingUser?.role || 'Employee'}
+                        required
+                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="Admin">Admin</option>
+                        <option value="HR Officer">HR Officer</option>
+                        <option value="Payroll Officer">Payroll Officer</option>
+                        <option value="Employee">Employee</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Department
+                      </label>
+                      <select
+                        name="department"
+                        defaultValue={editingUser?.department || ''}
+                        className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="">Select Department</option>
+                        <option value="HR">HR</option>
+                        <option value="IT">IT</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Engineering">Engineering</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="Sales">Sales</option>
+                        <option value="Operations">Operations</option>
+                        <option value="Legal">Legal</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Company *
+                    </label>
+                    <input
+                      type="text"
+                      name="company"
+                      defaultValue={editingUser?.company || 'WORKZEN'}
+                      required
+                      className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="flex gap-3 pt-4 border-t border-gray-800">
+                    <button
+                      type="button"
+                      onClick={() => setShowUserModal(false)}
+                      className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg transition-all flex items-center justify-center gap-2"
+                    >
+                      <Save className="w-4 h-4" />
+                      {editingUser ? 'Update User' : 'Create User'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </motion.div>
           </>

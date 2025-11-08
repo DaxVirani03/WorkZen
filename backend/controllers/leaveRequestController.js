@@ -1,6 +1,6 @@
 const LeaveRequest = require('../models/LeaveRequest');
 const User = require('../models/User');
-const Employee = require('../models/Employee');
+// Employee model merged into User model
 
 /**
  * Create leave request
@@ -44,19 +44,9 @@ exports.createLeave = async (req, res) => {
       }
     }
     
-    // Also try to find employee record
-    let employeeId = null;
-    if (finalEmail) {
-      const employee = await Employee.findOne({ email: finalEmail });
-      if (employee) {
-        employeeId = employee._id;
-      }
-    }
-    
     // Create leave request
     const leaveData = {
       userId: finalUserId,
-      employee: employeeId,
       type,
       from: startDate,
       to: endDate,
@@ -70,8 +60,7 @@ exports.createLeave = async (req, res) => {
     
     // Populate user details
     const populatedLeave = await LeaveRequest.findById(leave._id)
-      .populate('userId', 'name email role department')
-      .populate('employee', 'firstName lastName email employeeId');
+      .populate('userId', 'name email role department firstName lastName');
     
     console.log('✅ Leave request created:', populatedLeave._id);
     

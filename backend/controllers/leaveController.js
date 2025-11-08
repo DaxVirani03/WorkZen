@@ -1,5 +1,5 @@
 const Leave = require('../models/Leave');
-const Employee = require('../models/Employee');
+const User = require('../models/User'); // Changed from Employee to User
 
 /**
  * Get all leave requests with filters
@@ -252,8 +252,8 @@ exports.approveLeave = async (req, res) => {
 
     await leave.save();
 
-    // Update employee leave balance
-    const employee = await Employee.findById(leave.employee);
+    // Update user leave balance
+    const employee = await User.findById(leave.employee);
     if (employee && employee.leaveBalance) {
       const leaveTypeKey = leave.leaveType === 'annual' ? 'casual' : leave.leaveType;
       if (employee.leaveBalance[leaveTypeKey] !== undefined) {

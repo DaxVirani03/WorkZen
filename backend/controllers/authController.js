@@ -112,14 +112,15 @@ exports.register = async (req, res) => {
       designation: newUser.designation
     };
 
-    console.log(`✅ New user registered: ${email} (${role})`);
+    console.log(`✅ New user registered: ${email} (${role}) - UserID: ${newUser.userId}`);
 
-    // Return success response
+    // Return success response with userId highlighted
     return res.status(201).json({ 
       success: true,
-      message: 'User registered successfully',
+      message: `User registered successfully! Your User ID is: ${newUser.userId}`,
       token,
-      user: userResponse
+      user: userResponse,
+      userId: newUser.userId // Explicit userId field for easy access
     });
   } catch (error) {
     console.error('❌ Registration error:', error);
@@ -153,26 +154,32 @@ exports.register = async (req, res) => {
  * Login user
  * @route POST /api/auth/login
  * Returns token + user data with role for frontend redirection
+ * Accepts either email or userId as login identifier
  */
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, userId, password } = req.body;
 
-    // Validation
-    if (!email || !password) {
+    // Validation - require either email or userId
+    if ((!email && !userId) || !password) {
       return res.status(400).json({ 
         success: false,
-        message: 'Email and password are required' 
+        message: 'Email/UserID and password are required' 
       });
     }
 
-    // Find user by email and include password field
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    // Find user by email or userId and include password field
+    let user;
+    if (userId) {
+      user = await User.findOne({ userId: userId.toUpperCase() }).select('+password');
+    } else {
+      user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    }
     
     if (!user) {
       return res.status(401).json({ 
         success: false,
-        message: 'Invalid email or password' 
+        message: 'Invalid credentials' 
       });
     }
 
@@ -215,7 +222,7 @@ exports.login = async (req, res) => {
 
     // Update last login
     user.lastLogin = new Date();
-    await user.save();
+    await user.save({ validateModifiedOnly: true });
 
     // Generate token
     const token = generateToken(user._id, user.role);

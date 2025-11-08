@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Leave = require('../models/Leave');
-const Employee = require('../models/Employee');
+const User = require('../models/User'); // Changed from Employee to User
 
 const router = express.Router();
 
@@ -9,7 +9,7 @@ const router = express.Router();
 // @desc    Apply for leave
 // @access  Private
 router.post('/', [
-  body('employeeId', 'Employee ID is required').notEmpty(),
+  body('employeeId', 'User ID is required').notEmpty(), // Still called employeeId for compatibility
   body('leaveType', 'Leave type is required').isIn(['annual', 'sick', 'personal', 'maternity', 'paternity', 'emergency', 'unpaid', 'other']),
   body('startDate', 'Start date is required').isISO8601(),
   body('endDate', 'End date is required').isISO8601(),
@@ -36,12 +36,12 @@ router.post('/', [
       isEmergency = false
     } = req.body;
 
-    // Find employee
-    const employee = await Employee.findById(employeeId);
+    // Find user (employee)
+    const employee = await User.findById(employeeId);
     if (!employee) {
       return res.status(404).json({
         success: false,
-        message: 'Employee not found'
+        message: 'User not found'
       });
     }
 

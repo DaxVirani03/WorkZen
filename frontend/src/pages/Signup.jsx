@@ -8,8 +8,8 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Eye, EyeOff, Lock, Mail, User, Briefcase, UserPlus, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Eye, EyeOff, Lock, Mail, User, Briefcase, UserPlus, AlertCircle, CheckCircle, Copy } from 'lucide-react';
 
 function Signup() {
   const navigate = useNavigate();
@@ -27,6 +27,9 @@ function Signup() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [generatedUserId, setGeneratedUserId] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -97,11 +100,9 @@ function Signup() {
       const data = await response.json();
 
       if (response.ok) {
-        // Show success message with user ID
-        const successMessage = `Account created successfully! Your User ID is: ${data.user.userId}. Please login.`;
-        navigate('/login', { 
-          state: { message: successMessage }
-        });
+        // Show success modal with user ID
+        setGeneratedUserId(data.userId || data.user.userId);
+        setShowSuccessModal(true);
       } else {
         setError(data.message || 'Registration failed. Please try again.');
       }
@@ -111,6 +112,20 @@ function Signup() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCopyUserId = () => {
+    navigator.clipboard.writeText(generatedUserId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleProceedToLogin = () => {
+    navigate('/login', { 
+      state: { 
+        message: `Registration successful! You can login with your User ID: ${generatedUserId} or your email.`
+      }
+    });
   };
 
   return (
@@ -424,6 +439,87 @@ function Signup() {
           <p>By signing up, you agree to our Terms of Service and Privacy Policy</p>
         </motion.div>
       </motion.div>
+
+      {/* Success Modal */}
+      <AnimatePresence>
+        {showSuccessModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-gray-900 border-2 border-green-500/50 rounded-2xl p-8 max-w-md w-full shadow-2xl"
+            >
+              {/* Success Icon */}
+              <div className="flex justify-center mb-6">
+                <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-12 h-12 text-green-500" />
+                </div>
+              </div>
+
+              {/* Success Message */}
+              <h3 className="text-2xl font-bold text-white text-center mb-4">
+                Account Created Successfully! 🎉
+              </h3>
+              
+              <p className="text-gray-400 text-center mb-6">
+                Your account has been created. Please save your User ID for future logins.
+              </p>
+
+              {/* User ID Display */}
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4 mb-6">
+                <label className="block text-sm font-medium text-gray-400 mb-2">
+                  Your User ID
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={generatedUserId}
+                    readOnly
+                    className="flex-1 bg-gray-900 border border-gray-600 rounded px-4 py-3 text-white font-mono text-lg text-center focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                  <button
+                    onClick={handleCopyUserId}
+                    className="bg-primary hover:bg-blue-600 text-white px-4 py-3 rounded transition-all"
+                    title="Copy User ID"
+                  >
+                    {copied ? (
+                      <CheckCircle className="w-5 h-5" />
+                    ) : (
+                      <Copy className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+                {copied && (
+                  <p className="text-green-400 text-sm mt-2 text-center">
+                    ✓ User ID copied to clipboard!
+                  </p>
+                )}
+              </div>
+
+              {/* Info Box */}
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
+                <p className="text-blue-400 text-sm">
+                  💡 <strong>Important:</strong> You can login using either your User ID or email address along with your password.
+                </p>
+              </div>
+
+              {/* Proceed Button */}
+              <button
+                onClick={handleProceedToLogin}
+                className="w-full bg-primary hover:bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 flex items-center justify-center gap-2 shadow-lg"
+              >
+                Proceed to Login →
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -18,7 +18,7 @@ function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const [formData, setFormData] = useState({
-    email: '',
+    identifier: '', // Can be email or userId
     password: '',
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -49,12 +49,19 @@ function Login() {
     setError('');
 
     try {
+      // Determine if identifier is email or userId
+      const isEmail = formData.identifier.includes('@');
+      const loginData = {
+        password: formData.password,
+        ...(isEmail ? { email: formData.identifier } : { userId: formData.identifier })
+      };
+
       const response = await fetch('http://localhost:5000/api/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(loginData),
       });
 
       const data = await response.json();
@@ -162,27 +169,30 @@ function Login() {
 
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Field */}
+            {/* Email/UserID Field */}
             <motion.div
               whileFocus={{ scale: 1.01 }}
               className="space-y-2"
             >
-              <label htmlFor="email" className="block text-sm font-medium text-gray-300">
-                Email Address
+              <label htmlFor="identifier" className="block text-sm font-medium text-gray-300">
+                Email or User ID
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 w-5 h-5" />
                 <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
+                  type="text"
+                  id="identifier"
+                  name="identifier"
+                  value={formData.identifier}
                   onChange={handleChange}
                   required
                   className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                  placeholder="admin@workzen.com"
+                  placeholder="admin@workzen.com or WOJOSU20250001"
                 />
               </div>
+              <p className="text-xs text-gray-500 mt-1">
+                You can login with your email or User ID
+              </p>
             </motion.div>
 
             {/* Password Field */}

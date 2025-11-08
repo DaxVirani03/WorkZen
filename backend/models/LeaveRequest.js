@@ -8,13 +8,14 @@ const leaveRequestSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'User ID is required']
+    required: false // Make optional since we might not always have userId
   },
   
-  // Also store employee reference if exists
+  // Deprecated: employee field kept for backward compatibility
+  // Now we use userId which points to User model
   employee: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Employee'
+    ref: 'User' // Changed from Employee to User
   },
   
   type: {

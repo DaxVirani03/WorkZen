@@ -79,7 +79,7 @@ function DashboardHROfficer() {
 
   // Role check on mount
   useEffect(() => {
-    const token = localStorage.getItem('workzen_token');
+    const token = localStorage.getItem('token');
     const role = localStorage.getItem('workzen_role');
     const userData = localStorage.getItem('workzen_user');
 
@@ -90,10 +90,15 @@ function DashboardHROfficer() {
 
     if (userData) setUser(JSON.parse(userData));
 
-    // Initial data fetch
-    fetchEmployees();
-    fetchAttendance();
-    fetchLeaves();
+    // Initial data fetch with delays to avoid rate limiting
+    const loadData = async () => {
+      await fetchEmployees();
+      await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay
+      await fetchAttendance();
+      await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay
+      await fetchLeaves();
+    };
+    loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
@@ -131,44 +136,137 @@ function DashboardHROfficer() {
   }, [showProfileDropdown]);
 
   // ==================== DATA FETCHING ====================
-  // TODO: Replace mock responses with actual API calls when backend is ready
+  
+  // Helper function to handle rate limiting with retry
+  async function fetchWithRetry(url, options = {}, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const res = await fetch(url, options);
+        
+        // If rate limited, wait and retry
+        if (res.status === 429) {
+          const waitTime = Math.pow(2, i) * 1000; // Exponential backoff: 1s, 2s, 4s
+          console.log(`⏳ Rate limited. Waiting ${waitTime}ms before retry ${i + 1}/${retries}...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        
+        return res;
+      } catch (err) {
+        if (i === retries - 1) throw err;
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+  }
 
   async function fetchEmployees() {
     try {
-      const res = await fetch('/api/users');
-      if (!res.ok) throw new Error('Failed to fetch employees');
+      console.log('👥 HR - Fetching employees from API...');
+      const res = await fetchWithRetry('http://localhost:5000/api/users');
+      if (!res.ok) throw new Error(`Failed to fetch employees: ${res.status}`);
       const data = await res.json();
-      setEmployees(data.users || []);
+      console.log('✅ HR - Employees loaded:', data);
+      
+      // Handle both response formats
+      const employeesList = data.users || data.data || [];
+      
+      // Format employees with all necessary fields
+      const formattedEmployees = employeesList.map(emp => ({
+        id: emp._id || emp.id,
+        _id: emp._id || emp.id,
+        name: emp.name || `${emp.firstName || ''} ${emp.lastName || ''}`.trim(),
+        firstName: emp.firstName,
+        lastName: emp.lastName,
+        email: emp.email,
+        role: emp.role,
+        department: emp.department || 'N/A',
+        phone: emp.phone || emp.contactNumber || 'N/A',
+        joinDate: emp.joinDate || emp.joiningDate || emp.createdAt,
+        bankAccount: emp.bankAccount || emp.bankDetails || '',
+        address: emp.address || '',
+        status: emp.status || 'active',
+        isActive: emp.isActive !== false,
+        employeeId: emp.employeeId,
+        designation: emp.designation,
+        salary: emp.salary || emp.basicSalary
+      }));
+      
+      console.log(`📊 HR - Formatted ${formattedEmployees.length} employees`);
+      setEmployees(formattedEmployees);
     } catch (err) {
-      console.error('fetchEmployees error:', err);
+      console.error('❌ HR fetchEmployees error:', err);
+      showToast('Failed to load employees. Using demo data.', 'error');
       // Fallback mock data
       setEmployees([
-        { id: 1, name: 'Sarah Johnson', email: 'sarah.j@workzen.com', role: 'Senior Developer', department: 'Engineering', phone: '+1 234-567-8901', joinDate: '2023-01-15', status: 'present' },
-        { id: 2, name: 'Michael Chen', email: 'michael.c@workzen.com', role: 'Product Manager', department: 'Product', phone: '+1 234-567-8902', joinDate: '2022-06-20', status: 'present' },
-        { id: 3, name: 'Emily Rodriguez', email: 'emily.r@workzen.com', role: 'UX Designer', department: 'Design', phone: '+1 234-567-8903', joinDate: '2023-03-10', status: 'leave' },
-        { id: 4, name: 'James Wilson', email: 'james.w@workzen.com', role: 'HR Manager', department: 'Human Resources', phone: '+1 234-567-8904', joinDate: '2021-09-01', status: 'present' },
-        { id: 5, name: 'Anna Kumar', email: 'anna.k@workzen.com', role: 'Backend Developer', department: 'Engineering', phone: '+1 234-567-8905', joinDate: '2023-07-12', status: 'absent' },
+        { id: 1, name: 'Sarah Johnson', email: 'sarah.j@workzen.com', role: 'Employee', department: 'Engineering', phone: '+1 234-567-8901', joinDate: '2023-01-15', status: 'active', isActive: true },
+        { id: 2, name: 'Michael Chen', email: 'michael.c@workzen.com', role: 'Employee', department: 'Product', phone: '+1 234-567-8902', joinDate: '2022-06-20', status: 'active', isActive: true },
+        { id: 3, name: 'Emily Rodriguez', email: 'emily.r@workzen.com', role: 'Employee', department: 'Design', phone: '+1 234-567-8903', joinDate: '2023-03-10', status: 'active', isActive: false },
       ]);
     }
   }
 
   async function fetchAttendance() {
     try {
+      console.log('📅 HR - Fetching attendance from API...');
+      const token = localStorage.getItem('token');
       const params = new URLSearchParams();
       if (attendanceFilter.employee !== 'all') params.append('employee', attendanceFilter.employee);
       if (attendanceFilter.startDate) params.append('startDate', attendanceFilter.startDate);
       if (attendanceFilter.endDate) params.append('endDate', attendanceFilter.endDate);
       
-      const res = await fetch(`/api/attendance?${params}`);
-      if (!res.ok) throw new Error('Failed to fetch attendance');
+      const res = await fetchWithRetry(`http://localhost:5000/api/attendance?${params}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        console.error('❌ HR attendance API error:', res.status, errorData);
+        throw new Error(errorData.message || `Failed to fetch attendance: ${res.status}`);
+      }
+      
       const data = await res.json();
-      setAttendance(data.records || []);
-      buildAttendanceChart(data.records || []);
+      console.log('✅ HR - Attendance loaded:', data);
+      
+      // Handle different response formats
+      const attendanceList = Array.isArray(data) 
+        ? data 
+        : (data.data?.attendance || data.attendance || data.records || data.data || []);
+      
+      if (!Array.isArray(attendanceList) || attendanceList.length === 0) {
+        console.log('⚠️ HR - No attendance records found, using mock data');
+        const mockRecords = Array.from({ length: 7 }).map((_, i) => ({
+          date: new Date(Date.now() - (6 - i) * 86400000).toLocaleDateString(),
+          presentCount: Math.floor(Math.random() * 3) + 3,
+          totalCount: 5
+        }));
+        setAttendance(mockRecords);
+        buildAttendanceChart(mockRecords);
+        return;
+      }
+      
+      // Group by date for chart
+      const groupedByDate = {};
+      attendanceList.forEach(record => {
+        const date = new Date(record.date).toLocaleDateString();
+        if (!groupedByDate[date]) {
+          groupedByDate[date] = { date, presentCount: 0, totalCount: 0 };
+        }
+        groupedByDate[date].totalCount++;
+        if (record.status === 'present' || record.checkIn) {
+          groupedByDate[date].presentCount++;
+        }
+      });
+      
+      const chartData = Object.values(groupedByDate).slice(-7); // Last 7 days
+      
+      console.log(`📊 HR - Processed ${attendanceList.length} attendance records`);
+      setAttendance(chartData);
+      buildAttendanceChart(chartData);
     } catch (err) {
-      console.error('fetchAttendance error:', err);
+      console.error('❌ HR fetchAttendance error:', err);
+      showToast('Failed to load attendance data', 'error');
       // Fallback mock attendance data (last 7 days)
       const mockRecords = Array.from({ length: 7 }).map((_, i) => ({
-        day: i + 1,
         date: new Date(Date.now() - (6 - i) * 86400000).toLocaleDateString(),
         presentCount: Math.floor(Math.random() * 3) + 3,
         totalCount: 5
@@ -180,10 +278,11 @@ function DashboardHROfficer() {
 
   async function fetchLeaves() {
     try {
-      const res = await fetch('/api/leaves');
-      if (!res.ok) throw new Error('Failed to fetch leaves');
+      console.log('🏖️ HR - Fetching leaves from API...');
+      const res = await fetchWithRetry('http://localhost:5000/api/leaves');
+      if (!res.ok) throw new Error(`Failed to fetch leaves: ${res.status}`);
       const data = await res.json();
-      console.log('📋 HR - Fetched leaves:', data);
+      console.log('✅ HR - Leaves loaded:', data);
       
       // Handle both response formats
       const leavesList = data.leaves || data.data || [];
@@ -191,24 +290,28 @@ function DashboardHROfficer() {
       // Format leaves to match expected structure
       const formattedLeaves = leavesList.map(l => ({
         id: l._id || l.id,
-        employeeName: l.userId?.name || l.employee?.firstName + ' ' + l.employee?.lastName || 'Unknown',
-        email: l.email || l.userEmail || l.userId?.email || l.employee?.email,
-        type: l.type || l.leaveType,
+        _id: l._id || l.id,
+        employeeName: l.userId?.name || (l.employee?.firstName && l.employee?.lastName ? `${l.employee.firstName} ${l.employee.lastName}` : l.userName || 'Unknown'),
+        email: l.email || l.userEmail || l.userId?.email || l.employee?.email || 'N/A',
+        type: l.type || l.leaveType || 'General',
         from: l.from || l.startDate,
         to: l.to || l.endDate,
-        days: l.duration || Math.ceil((new Date(l.to || l.endDate) - new Date(l.from || l.startDate)) / (1000*60*60*24)) + 1,
-        status: l.status,
-        reason: l.reason,
-        createdAt: l.createdAt
+        days: l.duration || Math.max(1, Math.ceil((new Date(l.to || l.endDate) - new Date(l.from || l.startDate)) / (1000*60*60*24)) + 1),
+        status: l.status || 'pending',
+        reason: l.reason || l.description || 'No reason provided',
+        createdAt: l.createdAt,
+        appliedDate: l.appliedDate || l.createdAt
       }));
       
+      console.log(`📊 HR - Formatted ${formattedLeaves.length} leave requests`);
       setLeaves(formattedLeaves);
     } catch (err) {
-      console.error('❌ fetchLeaves error:', err);
+      console.error('❌ HR fetchLeaves error:', err);
+      showToast('Failed to load leave requests', 'error');
       // Fallback mock leave data
       setLeaves([
-        { id: 1, employeeName: 'Emily Rodriguez', email: 'emily.r@workzen.com', type: 'Vacation', from: '2025-12-10', to: '2025-12-14', days: 5, status: 'Pending', reason: 'Family trip' },
-        { id: 2, employeeName: 'Anna Kumar', email: 'anna.k@workzen.com', type: 'Sick Leave', from: '2025-11-08', to: '2025-11-08', days: 1, status: 'Pending', reason: 'Not feeling well' },
+        { id: 1, employeeName: 'Emily Rodriguez', email: 'emily.r@workzen.com', type: 'Vacation', from: '2025-12-10', to: '2025-12-14', days: 5, status: 'pending', reason: 'Family trip' },
+        { id: 2, employeeName: 'Anna Kumar', email: 'anna.k@workzen.com', type: 'Sick Leave', from: '2025-11-08', to: '2025-11-08', days: 1, status: 'pending', reason: 'Not feeling well' },
       ]);
     }
   }
@@ -250,13 +353,13 @@ function DashboardHROfficer() {
   function openEditEmployeeModal(employee) {
     setEditingEmployee(employee);
     setEmployeeForm({
-      name: employee.name || '',
+      name: employee.name || `${employee.firstName || ''} ${employee.lastName || ''}`.trim(),
       email: employee.email || '',
       role: employee.role || '',
       department: employee.department || '',
-      phone: employee.phone || '',
-      joinDate: employee.joinDate || '',
-      bankAccount: employee.bankAccount || '',
+      phone: employee.phone || employee.phoneNumber || employee.contactNumber || '',
+      joinDate: employee.joinDate || employee.dateOfJoining || employee.joiningDate || '',
+      bankAccount: employee.bankAccount || employee.bankDetails || '',
       address: employee.address || ''
     });
     setFormErrors({});
@@ -284,35 +387,63 @@ function DashboardHROfficer() {
 
     setSavingEmployee(true);
     try {
+      console.log('💾 HR - Saving employee:', employeeForm);
+      const token = localStorage.getItem('token');
       const method = editingEmployee ? 'PUT' : 'POST';
-      const url = editingEmployee ? `/api/users/${editingEmployee.id}` : '/api/users';
+      const url = editingEmployee ? `http://localhost:5000/api/users/${editingEmployee._id || editingEmployee.id}` : 'http://localhost:5000/api/users';
+      
+      // Prepare payload - split name into firstName and lastName
+      const nameParts = employeeForm.name.trim().split(' ');
+      const payload = {
+        firstName: nameParts[0] || '',
+        lastName: nameParts.slice(1).join(' ') || nameParts[0] || '',
+        email: employeeForm.email.toLowerCase(),
+        role: employeeForm.role,
+        department: employeeForm.department,
+        phoneNumber: employeeForm.phone,
+        address: employeeForm.address,
+        dateOfJoining: employeeForm.joinDate,
+        isActive: true
+      };
+
+      // Add password only for new employees
+      if (!editingEmployee) {
+        payload.password = 'Password@123';
+      }
+
+      // Add bank account if provided
+      if (employeeForm.bankAccount) {
+        payload.bankAccount = employeeForm.bankAccount;
+      }
+
+      console.log('📤 HR - Sending payload:', payload);
       
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(employeeForm)
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
       });
 
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || 'Failed to save employee');
+        const errData = await res.json().catch(() => ({}));
+        console.error('❌ HR - Save employee API error:', res.status, errData);
+        throw new Error(errData.message || `Failed to save employee: ${res.status}`);
       }
 
       const data = await res.json();
+      console.log('✅ HR - Employee saved:', data);
       
-      // Update local state optimistically
-      if (editingEmployee) {
-        setEmployees(prev => prev.map(e => e.id === editingEmployee.id ? { ...e, ...employeeForm } : e));
-        showToast('Employee updated successfully', 'success');
-      } else {
-        setEmployees(prev => [...prev, { id: data.id || Date.now(), ...employeeForm, status: 'present' }]);
-        showToast('Employee created successfully', 'success');
-      }
-
+      // Refresh employees list from server
+      await fetchEmployees();
+      
+      showToast(`Employee ${editingEmployee ? 'updated' : 'created'} successfully`, 'success');
       setShowEmployeeModal(false);
       setEmployeeForm({ name: '', email: '', role: '', department: '', phone: '', joinDate: '', bankAccount: '', address: '' });
     } catch (err) {
-      console.error('saveEmployee error:', err);
+      console.error('❌ HR saveEmployee error:', err);
       showToast(err.message || 'Failed to save employee', 'error');
     } finally {
       setSavingEmployee(false);
@@ -324,48 +455,35 @@ function DashboardHROfficer() {
   async function approveLeave(leave) {
     if (!window.confirm(`Approve ${leave.type} for ${leave.employeeName}?`)) return;
     
-    setProcessingLeave(leave.id);
+    setProcessingLeave(leave.id || leave._id);
     try {
-      console.log('✅ HR - Approving leave:', leave.id);
+      const token = localStorage.getItem('token');
+      const leaveId = leave._id || leave.id;
+      console.log('✅ HR - Approving leave:', leaveId);
       
-      // Get current user ID from localStorage or state
-      let approverId = user?._id;
-      if (!approverId) {
-        const storedUser = localStorage.getItem('workzen_user');
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          approverId = parsedUser._id || parsedUser.id;
-        }
-      }
-      
-      if (!approverId) {
-        throw new Error('User not authenticated. Please log in again.');
-      }
-      
-      console.log('📝 Approving leave with approverId:', approverId);
-      
-      const res = await fetch(`/api/leaves/${leave.id}`, {
+      const res = await fetch(`http://localhost:5000/api/leave/${leaveId}/approve`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ 
-          status: 'Approved',
-          approverId: approverId
+          status: 'approved',
+          approvedBy: user?._id || user?.id
         })
       });
 
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || `Server returned ${res.status}: ${res.statusText}`);
+        const errData = await res.json().catch(() => ({}));
+        console.error('❌ HR - Approve leave API error:', res.status, errData);
+        throw new Error(errData.message || `Failed to approve leave: ${res.status}`);
       }
 
-      const data = await res.json();
-      console.log('✅ HR - Leave approved:', data);
-
-      // Re-fetch leaves to get updated data from server
-      await fetchLeaves();
-      showToast(`Leave approved for ${leave.employeeName}`, 'success');
+      console.log('✅ HR - Leave approved successfully');
+      showToast('Leave approved successfully', 'success');
+      await fetchLeaves(); // Refresh leaves list
     } catch (err) {
-      console.error('❌ approveLeave error:', err);
+      console.error('❌ HR approveLeave error:', err);
       showToast(err.message || 'Failed to approve leave', 'error');
     } finally {
       setProcessingLeave(null);
@@ -373,53 +491,38 @@ function DashboardHROfficer() {
   }
 
   async function rejectLeave(leave) {
-    const reason = window.prompt(`Reject ${leave.type} for ${leave.employeeName}? Enter reason (optional):`);
-    if (reason === null) return; // User cancelled
+    if (!window.confirm(`Reject ${leave.type} for ${leave.employeeName}?`)) return;
     
-    setProcessingLeave(leave.id);
+    setProcessingLeave(leave.id || leave._id);
     try {
-      console.log('❌ HR - Rejecting leave:', leave.id);
+      const token = localStorage.getItem('token');
+      const leaveId = leave._id || leave.id;
+      console.log('❌ HR - Rejecting leave:', leaveId);
       
-      // Get current user ID from localStorage or state
-      let approverId = user?._id;
-      if (!approverId) {
-        const storedUser = localStorage.getItem('workzen_user');
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          approverId = parsedUser._id || parsedUser.id;
-        }
-      }
-      
-      if (!approverId) {
-        throw new Error('User not authenticated. Please log in again.');
-      }
-      
-      console.log('📝 Rejecting leave with approverId:', approverId);
-      
-      const res = await fetch(`/api/leaves/${leave.id}`, {
+      const res = await fetch(`http://localhost:5000/api/leave/${leaveId}/reject`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ 
-          status: 'Rejected',
-          approverId: approverId,
-          comments: reason || 'No reason provided'
+          status: 'rejected',
+          rejectedBy: user?._id || user?.id
         })
       });
 
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || `Server returned ${res.status}: ${res.statusText}`);
+        const errData = await res.json().catch(() => ({}));
+        console.error('❌ HR - Reject leave API error:', res.status, errData);
+        throw new Error(errData.message || `Failed to reject leave: ${res.status}`);
       }
 
-      const data = await res.json();
-      console.log('❌ HR - Leave rejected:', data);
-
-      // Re-fetch leaves to get updated data from server
-      await fetchLeaves();
-      showToast(`Leave rejected for ${leave.employeeName}`, 'success');
+      console.log('✅ HR - Leave rejected successfully');
+      showToast('Leave rejected successfully', 'success');
+      await fetchLeaves(); // Refresh leaves list
     } catch (err) {
-      console.error('rejectLeave error:', err);
-      showToast('Failed to reject leave', 'error');
+      console.error('❌ HR rejectLeave error:', err);
+      showToast(err.message || 'Failed to reject leave', 'error');
     } finally {
       setProcessingLeave(null);
     }
@@ -447,11 +550,11 @@ function DashboardHROfficer() {
 
   // Calculate KPIs
   const totalEmployees = employees.length;
-  const activeToday = employees.filter(e => e.status === 'present').length;
-  const pendingLeaves = leaves.filter(l => l.status === 'Pending').length;
+  const activeToday = employees.filter(e => e.isActive !== false && e.status !== 'inactive').length;
+  const pendingLeaves = leaves.filter(l => (l.status || '').toLowerCase() === 'pending').length;
   const attendanceCompliance = attendance.length > 0 
-    ? Math.round((attendance.reduce((acc, r) => acc + (r.presentCount || 0), 0) / attendance.reduce((acc, r) => acc + (r.totalCount || 1), 0)) * 100)
-    : 95;
+    ? Math.round((attendance.reduce((acc, r) => acc + (r.presentCount || 0), 0) / Math.max(1, attendance.reduce((acc, r) => acc + (r.totalCount || 1), 0))) * 100)
+    : 0;
 
   const chartOptions = {
     responsive: true,
@@ -833,22 +936,22 @@ function DashboardHROfficer() {
       {/* ==================== EMPLOYEE CREATE/EDIT MODAL ==================== */}
       <AnimatePresence>
         {showEmployeeModal && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => !savingEmployee && setShowEmployeeModal(false)}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
-            />
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => !savingEmployee && setShowEmployeeModal(false)}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center"
+          >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-2xl bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl z-50 overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+              className="w-[90%] max-w-2xl max-h-[90vh] bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl z-50 flex flex-col"
             >
-              <div className="p-6 border-b border-gray-800 flex items-center justify-between">
-                <h3 className="text-xl font-bold text-white">
+            <div className="p-6 border-b border-gray-800 flex items-center justify-between flex-shrink-0">
+              <h3 className="text-xl font-bold text-white">
                   {editingEmployee ? 'Edit Employee' : 'Create New Employee'}
                 </h3>
                 <button
@@ -861,7 +964,7 @@ function DashboardHROfficer() {
                 </button>
               </div>
 
-              <div className="p-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+              <div className="p-6 overflow-y-auto flex-1">
                 <form onSubmit={(e) => { e.preventDefault(); saveEmployee(); }} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -898,14 +1001,18 @@ function DashboardHROfficer() {
                       <label className="block text-sm text-gray-300 mb-1">
                         Role <span className="text-red-400">*</span>
                       </label>
-                      <input
-                        type="text"
+                      <select
                         value={employeeForm.role}
                         onChange={(e) => setEmployeeForm({ ...employeeForm, role: e.target.value })}
                         className={`w-full px-3 py-2 bg-gray-800 border ${formErrors.role ? 'border-red-500' : 'border-gray-700'} rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary`}
-                        placeholder="Software Engineer"
                         aria-label="Employee role"
-                      />
+                      >
+                        <option value="">Select Role</option>
+                        <option value="Admin">Admin</option>
+                        <option value="HR Officer">HR Officer</option>
+                        <option value="Payroll Officer">Payroll Officer</option>
+                        <option value="Employee">Employee</option>
+                      </select>
                       {formErrors.role && <p className="text-xs text-red-400 mt-1">{formErrors.role}</p>}
                     </div>
 
@@ -913,14 +1020,22 @@ function DashboardHROfficer() {
                       <label className="block text-sm text-gray-300 mb-1">
                         Department <span className="text-red-400">*</span>
                       </label>
-                      <input
-                        type="text"
+                      <select
                         value={employeeForm.department}
                         onChange={(e) => setEmployeeForm({ ...employeeForm, department: e.target.value })}
                         className={`w-full px-3 py-2 bg-gray-800 border ${formErrors.department ? 'border-red-500' : 'border-gray-700'} rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary`}
-                        placeholder="Engineering"
                         aria-label="Employee department"
-                      />
+                      >
+                        <option value="">Select Department</option>
+                        <option value="HR">HR</option>
+                        <option value="IT">IT</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Marketing">Marketing</option>
+                        <option value="Sales">Sales</option>
+                        <option value="Operations">Operations</option>
+                        <option value="Engineering">Engineering</option>
+                        <option value="Legal">Legal</option>
+                      </select>
                       {formErrors.department && <p className="text-xs text-red-400 mt-1">{formErrors.department}</p>}
                     </div>
 
@@ -974,33 +1089,34 @@ function DashboardHROfficer() {
                       aria-label="Employee address"
                     ></textarea>
                   </div>
-
-                  <div className="flex items-center gap-3 pt-4">
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      type="submit"
-                      disabled={savingEmployee}
-                      className="flex-1 px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      <Save className="w-4 h-4" />
-                      {savingEmployee ? 'Saving...' : editingEmployee ? 'Update Employee' : 'Create Employee'}
-                    </motion.button>
-                    <motion.button
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      type="button"
-                      onClick={() => !savingEmployee && setShowEmployeeModal(false)}
-                      disabled={savingEmployee}
-                      className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium transition-all disabled:opacity-50"
-                    >
-                      Cancel
-                    </motion.button>
-                  </div>
                 </form>
               </div>
+
+              <div className="p-6 border-t border-gray-800 flex items-center gap-3 flex-shrink-0">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="submit"
+                  onClick={(e) => { e.preventDefault(); saveEmployee(); }}
+                  disabled={savingEmployee}
+                  className="flex-1 px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  {savingEmployee ? 'Saving...' : editingEmployee ? 'Update Employee' : 'Create Employee'}
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  type="button"
+                  onClick={() => !savingEmployee && setShowEmployeeModal(false)}
+                  disabled={savingEmployee}
+                  className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+                >
+                  Cancel
+                </motion.button>
+              </div>
             </motion.div>
-          </>
+          </motion.div>
         )}
       </AnimatePresence>
 

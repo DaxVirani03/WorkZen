@@ -1,10 +1,16 @@
 const mongoose = require('mongoose');
 
 const attendanceSchema = new mongoose.Schema({
+  // Reference to User (which contains employee data)
   employee: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Employee',
-    required: [true, 'Employee reference is required']
+    ref: 'User', // Changed from 'Employee' to 'User'
+    required: [true, 'User reference is required']
+  },
+  // Alternate field name for clarity
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   },
 
   date: {
@@ -93,7 +99,7 @@ const attendanceSchema = new mongoose.Schema({
 
   approvedBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Employee'
+    ref: 'User' // Changed from 'Employee' to 'User'
   },
 
   approvedAt: Date,
