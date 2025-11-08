@@ -13,7 +13,6 @@ export default function About() {
             <div className="flex space-x-8">
               <Link to="/" className="hover:text-primary-500 transition-colors">Home</Link>
               <Link to="/about" className="hover:text-primary-500 transition-colors">About</Link>
-              <Link to="/pricing" className="hover:text-primary-500 transition-colors">Pricing</Link>
               <Link to="/contact" className="hover:text-primary-500 transition-colors">Contact</Link>
             </div>
           </div>

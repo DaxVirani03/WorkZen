@@ -69,14 +69,6 @@ export default function LandingPage() {
               >
                 Sign Up
               </Link>
-              <a 
-                href="https://github.com/DaxVirani03/WorkZen" 
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-6 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors font-semibold"
-              >
-                View on GitHub
-              </a>
             </div>
 
             {/* Mobile Menu Button */}
@@ -102,14 +94,6 @@ export default function LandingPage() {
               >
                 Sign Up
               </Link>
-              <a 
-                href="https://github.com/DaxVirani03/WorkZen" 
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full text-left px-6 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg transition-colors font-semibold"
-              >
-                View on GitHub
-              </a>
             </div>
           )}
         </div>
@@ -259,7 +243,6 @@ export default function LandingPage() {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
-                viewport={{ once: true }}
                 className="p-6 rounded-2xl bg-black border border-gray-800 hover:border-primary-500/50 transition-all duration-300"
               >
                 <feature.icon className="w-12 h-12 text-primary-500 mb-4" />
@@ -268,42 +251,6 @@ export default function LandingPage() {
               </motion.div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* ==================== SECTION 4: MAKE THE SHIFT CTA ==================== */}
-      <section id="make-shift" className="section-padding bg-gradient-to-r from-primary-600 to-primary-800">
-        <div className="container-custom text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-4xl md:text-5xl font-bold mb-6">
-              Ready to Transform Your HR?
-            </h2>
-            <p className="text-xl text-white/90 mb-8 max-w-2xl mx-auto">
-              Join the community of developers and businesses building modern HRMS solutions with WorkZen - 100% Open Source
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <a 
-                href="https://github.com/DaxVirani03/WorkZen"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-12 py-4 bg-white text-primary-600 hover:bg-gray-100 rounded-lg transition-colors font-semibold text-lg inline-block"
-              >
-                View on GitHub
-              </a>
-              <button 
-                onClick={() => scrollToSection('demo')}
-                className="px-12 py-4 bg-transparent border-2 border-white text-white hover:bg-white hover:text-primary-600 rounded-lg transition-colors font-semibold text-lg"
-              >
-                Try Demo
-              </button>
-            </div>
-            <p className="mt-4 text-white/80">Free & Open Source • Community Driven • Self-Hosted</p>
-          </motion.div>
         </div>
       </section>
 
@@ -331,7 +278,6 @@ export default function LandingPage() {
                 initial={{ opacity: 0, scale: 0.9 }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
-                viewport={{ once: true }}
                 className="p-6 rounded-2xl bg-black border border-gray-800 hover:border-primary-500/50 transition-all duration-300 text-center"
               >
                 <tier.icon className="w-12 h-12 text-primary-500 mx-auto mb-4" />
@@ -345,7 +291,6 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
             className="mt-16 p-8 rounded-2xl bg-gradient-to-r from-primary-500/10 to-accent-500/10 border border-primary-500/20"
           >
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
@@ -374,7 +319,6 @@ export default function LandingPage() {
               initial={{ opacity: 0, x: -50 }}
               whileInView={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8 }}
-              viewport={{ once: true }}
             >
               <div className="relative bg-gradient-to-br from-accent-500/20 to-primary-500/20 rounded-3xl p-8 backdrop-blur-sm border border-white/10">
                 <MessageSquare className="w-full h-64 text-accent-500/30" />
@@ -391,7 +335,6 @@ export default function LandingPage() {
               initial={{ opacity: 0, x: 50 }}
               whileInView={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8 }}
-              viewport={{ once: true }}
             >
               <h2 className="text-4xl md:text-5xl font-bold mb-6">
                 Boost <span className="gradient-text">Employee Engagement</span>
@@ -445,7 +388,6 @@ export default function LandingPage() {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
-                viewport={{ once: true }}
                 className="p-6 rounded-2xl bg-black border border-gray-800 hover:border-primary-500/50 transition-all duration-300"
               >
                 <feature.icon className="w-12 h-12 text-primary-500 mb-4" />
@@ -460,7 +402,6 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
             className="p-8 rounded-2xl bg-gradient-to-br from-gray-900 to-black border border-gray-800"
           >
             <div className="grid md:grid-cols-4 gap-6 mb-8">
@@ -492,7 +433,6 @@ export default function LandingPage() {
               initial={{ opacity: 0, x: -50 }}
               whileInView={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8 }}
-              viewport={{ once: true }}
             >
               <h2 className="text-4xl md:text-5xl font-bold mb-6">
                 <span className="gradient-text">Integrated Payroll</span> Management
@@ -524,7 +464,6 @@ export default function LandingPage() {
               initial={{ opacity: 0, x: 50 }}
               whileInView={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8 }}
-              viewport={{ once: true }}
             >
               <div className="p-8 rounded-2xl bg-black border border-gray-800">
                 <DollarSign className="w-16 h-16 text-primary-500 mb-6" />
@@ -552,44 +491,6 @@ export default function LandingPage() {
                 </div>
               </div>
             </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* ==================== SECTION 12: CORE HR MANAGEMENT ==================== */}
-      <section id="core-hr" className="section-padding">
-        <div className="container-custom">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4">
-              Complete <span className="gradient-text">Core HR</span> Management
-            </h2>
-            <p className="text-xl text-gray-400 max-w-3xl mx-auto">
-              All essential HR functions in one unified platform
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { icon: Users, title: 'Employee Database', description: 'Centralized employee records with document management' },
-              { icon: FileText, title: 'Policy Management', description: 'Store and distribute company policies digitally' },
-              { icon: Calendar, title: 'Shift Scheduling', description: 'Manage multiple shifts and rosters efficiently' },
-              { icon: Clock, title: 'Time Tracking', description: 'Accurate timesheet and overtime management' },
-              { icon: Shield, title: 'Compliance', description: 'Stay compliant with Indian labor laws' },
-              { icon: Lock, title: 'Access Control', description: 'Role-based permissions and data security' },
-            ].map((feature, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                viewport={{ once: true }}
-                className="p-6 rounded-2xl bg-black border border-gray-800 hover:border-primary-500/50 transition-all duration-300"
-              >
-                <feature.icon className="w-12 h-12 text-primary-500 mb-4" />
-                <h3 className="text-xl font-semibold mb-2">{feature.title}</h3>
-                <p className="text-gray-400">{feature.description}</p>
-              </motion.div>
-            ))}
           </div>
         </div>
       </section>
@@ -634,7 +535,6 @@ export default function LandingPage() {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
-                viewport={{ once: true }}
                 className="p-6 rounded-2xl bg-black border border-gray-800"
               >
                 <h3 className="text-lg font-semibold mb-2">{faq.q}</h3>
