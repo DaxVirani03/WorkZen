@@ -7,6 +7,7 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const { generateUserId } = require('../utils/userIdGenerator');
 
 // Generate JWT Token
 const generateToken = (userId, role) => {
@@ -25,13 +26,13 @@ const generateToken = (userId, role) => {
  */
 exports.register = async (req, res) => {
   try {
-    const { name, email, password, role, department, designation } = req.body;
+    const { firstName, lastName, email, password, role, department, designation, company } = req.body;
 
     // Validation
-    if (!name || !email || !password || !role) {
+    if (!firstName || !lastName || !email || !password || !role || !company) {
       return res.status(400).json({ 
         success: false,
-        message: 'All fields are required (name, email, password, role)' 
+        message: 'All fields are required (firstName, lastName, email, password, role, company)' 
       });
     }
 
@@ -70,15 +71,26 @@ exports.register = async (req, res) => {
       });
     }
 
+    // Generate join date and year
+    const joinDate = new Date();
+    const joinYear = joinDate.getFullYear();
+
+    // Generate unique user ID
+    const userId = await generateUserId(company, firstName, lastName, joinYear);
+
     // Create new user (password will be hashed by pre-save middleware)
     const newUser = await User.create({
-      name,
+      name: `${firstName} ${lastName}`,
+      firstName,
+      lastName,
+      company,
+      userId,
       email: email.toLowerCase(),
       password,
       role,
       department,
       designation,
-      joinDate: new Date(),
+      joinDate,
       isVerified: false, // Require email verification in production
       isActive: true
     });
@@ -89,7 +101,11 @@ exports.register = async (req, res) => {
     // Return user data without password
     const userResponse = {
       id: newUser._id,
+      userId: newUser.userId,
       name: newUser.name,
+      firstName: newUser.firstName,
+      lastName: newUser.lastName,
+      company: newUser.company,
       email: newUser.email,
       role: newUser.role,
       department: newUser.department,
@@ -209,7 +225,11 @@ exports.login = async (req, res) => {
     // Return user data without password
     const userResponse = {
       id: user._id,
+      userId: user.userId,
       name: user.name,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      company: user.company,
       email: user.email,
       role: user.role,
       department: user.department,
