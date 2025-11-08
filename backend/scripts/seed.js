@@ -31,6 +31,9 @@ const seedUsers = async () => {
     // Seed users
     const users = await User.create([
       {
+        firstName: 'Admin',
+        lastName: 'User',
+        company: 'WorkZen',
         name: 'Admin User',
         email: 'admin@workzen.com',
         password: 'admin123',
@@ -41,9 +44,12 @@ const seedUsers = async () => {
         isActive: true
       },
       {
-        name: 'John Employee',
-        email: 'employee@workzen.com',
-        password: 'employee123',
+        firstName: 'John',
+        lastName: 'Doe',
+        company: 'WorkZen',
+        name: 'John Doe',
+        email: 'employee1@workzen.com',
+        password: 'emp123',
         role: 'Employee',
         department: 'Engineering',
         designation: 'Software Developer',
@@ -51,9 +57,12 @@ const seedUsers = async () => {
         isActive: true
       },
       {
-        name: 'Sarah HR',
-        email: 'hr@workzen.com',
-        password: 'hr123',
+        firstName: 'Sarah',
+        lastName: 'Johnson',
+        company: 'WorkZen',
+        name: 'Sarah Johnson',
+        email: 'hr1@workzen.com',
+        password: 'hr1234',
         role: 'HR Officer',
         department: 'HR',
         designation: 'HR Manager',
@@ -61,32 +70,15 @@ const seedUsers = async () => {
         isActive: true
       },
       {
+        firstName: 'Mike',
+        lastName: 'Payroll',
+        company: 'WorkZen',
         name: 'Mike Payroll',
-        email: 'payroll@workzen.com',
-        password: 'payroll123',
+        email: 'payroll1@workzen.com',
+        password: 'pay123',
         role: 'Payroll Officer',
         department: 'Finance',
         designation: 'Payroll Manager',
-        isVerified: true,
-        isActive: true
-      },
-      {
-        name: 'Emily Rodriguez',
-        email: 'emily@workzen.com',
-        password: 'employee123',
-        role: 'Employee',
-        department: 'Design',
-        designation: 'UX Designer',
-        isVerified: true,
-        isActive: true
-      },
-      {
-        name: 'David Park',
-        email: 'david@workzen.com',
-        password: 'employee123',
-        role: 'Employee',
-        department: 'Engineering',
-        designation: 'DevOps Engineer',
         isVerified: true,
         isActive: true
       }
@@ -221,14 +213,14 @@ const runSeeder = async () => {
     console.log('\n🌱 Starting database seeding...\n');
     
     const users = await seedUsers();
-    await seedEmployees(users);
+    // await seedEmployees(users);
     
     console.log('\n✅ Database seeding completed successfully!\n');
     console.log('📝 Test Credentials:');
-    console.log('   Admin:    admin@workzen.com    / admin123');
-    console.log('   Employee: employee@workzen.com / employee123');
-    console.log('   HR:       hr@workzen.com       / hr123');
-    console.log('   Payroll:  payroll@workzen.com  / payroll123');
+    console.log('   Admin:       admin@workzen.com    / admin123');
+    console.log('   Employee:    employee1@workzen.com / emp123');
+    console.log('   HR Officer:  hr1@workzen.com       / hr1234');
+    console.log('   Payroll:     payroll1@workzen.com  / pay123');
     console.log('\n');
     
     process.exit(0);

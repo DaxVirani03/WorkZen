@@ -96,7 +96,7 @@ function Dashboard() {
             <div className="flex items-center gap-4">
               <div className="text-right hidden sm:block">
                 <p className="text-sm text-gray-400">Welcome back,</p>
-                <p className="text-white font-semibold capitalize">{user.name}</p>
+                <p className="text-white font-semibold capitalize">{user.name || user.firstName + ' ' + user.lastName || 'User'}</p>
               </div>
               
               <motion.button
@@ -123,7 +123,7 @@ function Dashboard() {
           className="mb-8"
         >
           <h2 className="text-3xl font-bold text-white mb-2">
-            Welcome, {user.name}! 👋
+            Welcome, {user.name || user.firstName + ' ' + user.lastName || 'User'}! 👋
           </h2>
           <p className="text-gray-400">
             You're logged in as <span className="text-primary font-semibold">{user.role}</span>
@@ -145,7 +145,7 @@ function Dashboard() {
               </div>
               <div>
                 <p className="text-gray-400 text-sm">Name</p>
-                <p className="text-white font-semibold capitalize">{user.name}</p>
+                <p className="text-white font-semibold capitalize">{user.name || user.firstName + ' ' + user.lastName || 'User'}</p>
               </div>
             </div>
             

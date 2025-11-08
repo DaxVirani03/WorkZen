@@ -277,7 +277,7 @@ function DashboardAdmin() {
                 >
                   {/* Avatar Circle with Initial */}
                   <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-sm">
-                    {user.name.charAt(0).toUpperCase()}
+                    {(user.name || user.firstName + ' ' + user.lastName || 'A').charAt(0).toUpperCase()}
                   </div>
                   <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showProfileDropdown ? 'rotate-180' : ''}`} />
                 </motion.button>
@@ -492,7 +492,7 @@ function DashboardAdmin() {
 
                     {/* Employee Avatar */}
                     <div className="w-20 h-20 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-2xl mb-4">
-                      {employee.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                      {(employee.name || 'Unknown User').split(' ').map(n => n[0]).join('').toUpperCase()}
                     </div>
 
                     {/* Employee Info */}
@@ -602,7 +602,7 @@ function DashboardAdmin() {
                 {/* Avatar & Name */}
                 <div className="text-center">
                   <div className="w-24 h-24 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-3xl mx-auto mb-4">
-                    {selectedEmployee.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                    {(selectedEmployee.name || 'Unknown User').split(' ').map(n => n[0]).join('').toUpperCase()}
                   </div>
                   <h4 className="text-xl font-bold text-white">{selectedEmployee.name}</h4>
                   <p className="text-gray-400 text-sm mt-1">{selectedEmployee.title}</p>

@@ -7,11 +7,11 @@ const bcrypt = require('bcryptjs');
  * Links to Employee model for detailed information
  */
 const userSchema = new mongoose.Schema({
-  // name: {
-  //   type: String,
-  //   required: [true, 'Name is required'],
-  //   trim: true
-  // },
+  name: {
+    type: String,
+    required: [true, 'Name is required'],
+    trim: true
+  },
   firstName: {
     type: String,
     required: [true, 'First name is required'],

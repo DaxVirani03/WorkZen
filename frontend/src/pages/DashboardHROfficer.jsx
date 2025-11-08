@@ -548,7 +548,7 @@ function DashboardHROfficer() {
                   className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition-all"
                 >
                   <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-sm">
-                    {user.name.charAt(0).toUpperCase()}
+                    {(user.name || user.firstName + ' ' + user.lastName || 'H').charAt(0).toUpperCase()}
                   </div>
                   <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showProfileDropdown ? 'rotate-180' : ''}`} />
                 </motion.button>
@@ -667,7 +667,7 @@ function DashboardHROfficer() {
                       >
                         <div className="flex items-start justify-between mb-4">
                           <div className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-xl">
-                            {employee.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                            {(employee.name || 'Unknown User').split(' ').map(n => n[0]).join('').toUpperCase()}
                           </div>
                           <motion.button
                             whileHover={{ scale: 1.1 }}
@@ -759,7 +759,7 @@ function DashboardHROfficer() {
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
                               <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-sm">
-                                {leave.employeeName.split(' ').map(n => n[0]).join('').toUpperCase()}
+                                {(leave.employeeName || 'Unknown').split(' ').map(n => n[0]).join('').toUpperCase()}
                               </div>
                               <div>
                                 <p className="text-white font-medium">{leave.employeeName}</p>

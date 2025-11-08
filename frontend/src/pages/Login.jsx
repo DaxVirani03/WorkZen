@@ -220,7 +220,7 @@ function Login() {
               <div className="text-xs text-gray-500 mt-2 space-y-1">
                 <p className="font-semibold text-gray-400">Test credentials:</p>
                 <p>• Employee: employee1@workzen.com / emp123</p>
-                <p>• HR Officer: hr1@workzen.com / hr123</p>
+                <p>• HR Officer: hr1@workzen.com / hr1234</p>
                 <p>• Payroll Officer: payroll1@workzen.com / pay123</p>
                 <p>• Admin: admin@workzen.com / admin123</p>
               </div>

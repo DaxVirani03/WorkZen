@@ -126,12 +126,12 @@ function Profile() {
               <div className="flex items-center gap-6">
                 {/* Avatar */}
                 <div className="w-24 h-24 bg-white/20 backdrop-blur-xl rounded-full flex items-center justify-center text-white font-bold text-3xl border-4 border-white/30">
-                  {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                  {(user.name || user.firstName + ' ' + user.lastName || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
                 </div>
                 
                 {/* Name & Role */}
                 <div>
-                  <h1 className="text-3xl font-bold text-white mb-2">{user.name}</h1>
+                  <h1 className="text-3xl font-bold text-white mb-2">{user.name || user.firstName + ' ' + user.lastName || 'User'}</h1>
                   <div className="flex items-center gap-2 text-white/90">
                     <Shield className="w-4 h-4" />
                     <span className="font-medium">{user.role}</span>
@@ -174,7 +174,7 @@ function Profile() {
                   />
                 ) : (
                   <div className="px-4 py-3 bg-gray-800/50 border border-gray-800 rounded-lg text-white">
-                    {user.name}
+                    {user.name || user.firstName + ' ' + user.lastName || 'User'}
                   </div>
                 )}
               </div>

@@ -334,7 +334,7 @@ function DashboardEmployee() {
               <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => setShowTimeOffModal(true)} className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all"><UserPlus className="w-4 h-4" />Apply</motion.button>
               <div className="relative">
                 <motion.button ref={avatarBtnRef} onClick={() => setShowProfileDropdown(p => !p)} whileHover={{ scale: 1.05 }} className="flex items-center gap-2 px-3 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg border border-gray-700 transition-all">
-                  <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-sm">{user.name.split(' ')[0][0].toUpperCase()}</div>
+                  <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-sm">{(user.name || user.firstName + ' ' + user.lastName || 'U').split(' ')[0][0].toUpperCase()}</div>
                   <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showProfileDropdown ? 'rotate-180' : ''}`} />
                 </motion.button>
 
@@ -379,7 +379,7 @@ function DashboardEmployee() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredDirectory.map((emp, idx) => (
                       <motion.button key={emp.id || idx} whileHover={{ y: -4 }} onClick={() => { setSelectedEmployee(emp); setShowEmployeePanel(true); }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6 text-left cursor-pointer">
-                        <div className="flex items-center gap-4"><div className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-xl">{(emp.name||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><div><h3 className="text-lg font-semibold text-white">{emp.name}</h3><p className="text-gray-400 text-sm">{emp.role || emp.title || 'Employee'}</p><p className="text-gray-500 text-xs mt-1">{emp.email}</p></div></div>
+                        <div className="flex items-center gap-4">                        <div className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-xl">{(emp.name||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><div><h3 className="text-lg font-semibold text-white">{emp.name || 'Unknown User'}</h3><p className="text-gray-400 text-sm">{emp.role || emp.title || 'Employee'}</p><p className="text-gray-500 text-xs mt-1">{emp.email}</p></div></div>
                       </motion.button>
                     ))}
                     {filteredDirectory.length === 0 && <div className="text-gray-400">No employees found.</div>}
