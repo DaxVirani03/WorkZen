@@ -79,7 +79,7 @@ function DashboardHROfficer() {
 
   // Role check on mount
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('workzen_token');
     const role = localStorage.getItem('workzen_role');
     const userData = localStorage.getItem('workzen_user');
 

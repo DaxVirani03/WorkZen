@@ -439,25 +439,35 @@ function DashboardPayrollOfficer() {
   // Fetch attendance
   const fetchAttendance = async () => {
     try {
-      // TODO: Replace with real API call
-      // const response = await fetch('/api/attendance', { headers: { 'Authorization': `Bearer ${localStorage.getItem('workzen_token')}` } });
-      // const data = await response.json();
-      
-      // Mock data
-      const mockAttendance = [
-        { department: 'Engineering', present: 45, total: 50, percentage: 90 },
-        { department: 'Product', present: 18, total: 20, percentage: 90 },
-        { department: 'Design', present: 13, total: 15, percentage: 87 },
-        { department: 'HR', present: 8, total: 10, percentage: 80 },
-        { department: 'Marketing', present: 22, total: 25, percentage: 88 },
-        { department: 'Sales', present: 28, total: 30, percentage: 93 },
-      ];
-      
-      setAttendance(mockAttendance);
-      buildAttendanceChart(mockAttendance);
+      console.log('📊 Fetching attendance data from API...');
+      const response = await fetch('http://localhost:5000/api/attendance/stats/by-department', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('workzen_token')}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch attendance: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Attendance API response:', result);
+
+      if (result.success && result.data) {
+        const attendanceData = result.data;
+        console.log('📊 Attendance by department:', attendanceData);
+        
+        setAttendance(attendanceData);
+        buildAttendanceChart(attendanceData);
+      } else {
+        throw new Error('Invalid response format');
+      }
     } catch (error) {
-      console.error('Error fetching attendance:', error);
+      console.error('❌ Error fetching attendance:', error);
       showToast('Failed to load attendance data', 'error');
+      
+      // Fallback to empty data
+      setAttendance([]);
     }
   };
 
@@ -743,7 +753,7 @@ function DashboardPayrollOfficer() {
               className="bg-gray-900/50 border border-gray-800 rounded-xl p-6"
             >
               <Check className="w-8 h-8 text-green-400 mb-3" />
-              <p className="text-gray-400 text-sm mb-1">Payruns Completed</p>
+              <p className="text-gray-400 text-sm mb-1">Payslips Generated</p>
               <p className="text-3xl font-bold text-white">{payrunsCompleted}</p>
             </motion.div>
 
@@ -1022,20 +1032,28 @@ function DashboardPayrollOfficer() {
                         </tr>
                       </thead>
                       <tbody>
-                        {attendance.map((dept, index) => (
-                          <motion.tr
-                            key={index}
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ delay: index * 0.05 }}
-                            className="border-b border-gray-800 hover:bg-gray-800/30 transition-colors"
-                          >
-                            <td className="py-3 px-4 text-white font-medium">{dept.department}</td>
-                            <td className="py-3 px-4 text-center text-green-400">{dept.present}</td>
-                            <td className="py-3 px-4 text-center text-gray-400">{dept.total}</td>
-                            <td className="py-3 px-4 text-right text-white font-semibold">{dept.percentage}%</td>
-                          </motion.tr>
-                        ))}
+                        {attendance.length > 0 ? (
+                          attendance.map((dept, index) => (
+                            <motion.tr
+                              key={index}
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              transition={{ delay: index * 0.05 }}
+                              className="border-b border-gray-800 hover:bg-gray-800/30 transition-colors"
+                            >
+                              <td className="py-3 px-4 text-white font-medium">{dept.department}</td>
+                              <td className="py-3 px-4 text-center text-green-400">{dept.present}</td>
+                              <td className="py-3 px-4 text-center text-gray-400">{dept.total}</td>
+                              <td className="py-3 px-4 text-right text-white font-semibold">{dept.percentage}%</td>
+                            </motion.tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="4" className="py-8 text-center text-gray-400">
+                              No attendance data available
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1165,11 +1183,19 @@ function DashboardPayrollOfficer() {
         show={showNewPayslipModal}
         onClose={() => setShowNewPayslipModal(false)}
         onSubmit={(newPayslip) => {
+          // Show success notification
+          showToast('Payslip created successfully!', 'success');
+          
+          // Close the modal
+          setShowNewPayslipModal(false);
+          
           // Add the newly created payslip to the list
           setPayrolls(prev => [newPayslip, ...prev]);
+          
           // Refresh stats
           fetchStats();
-          // Refresh payroll list
+          
+          // Refresh payroll list to get latest data
           fetchPayrolls();
         }}
       />

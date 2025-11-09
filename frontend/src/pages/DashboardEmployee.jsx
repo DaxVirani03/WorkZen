@@ -25,7 +25,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 function DashboardEmployee() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
-  const [activeMenu, setActiveMenu] = useState('Employees');
+  const [activeMenu, setActiveMenu] = useState('Dashboard');
   const [searchQuery, setSearchQuery] = useState('');
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const avatarBtnRef = useRef(null);
@@ -105,6 +105,7 @@ function DashboardEmployee() {
     fetchDirectory();
     fetchAttendance();
     fetchTodayAttendance();
+    fetchKPIs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
@@ -117,15 +118,20 @@ function DashboardEmployee() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Fetch directory (uses /api/users mock)
+  // Fetch directory (uses /api/users)
   async function fetchDirectory() {
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch('http://localhost:5000/api/users', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('workzen_token')}`
+        }
+      });
       if (!res.ok) throw new Error('Directory load failed');
       const data = await res.json();
       setDirectory(data.users || []);
+      console.log('✅ Directory loaded:', data.users?.length || 0, 'users');
     } catch (err) {
-      console.error(err);
+      console.error('❌ Fetch directory error:', err);
       setDirectory([]); // fallback
     }
   }
@@ -136,51 +142,163 @@ function DashboardEmployee() {
       const storedUser = JSON.parse(localStorage.getItem('workzen_user') || '{}');
       const userId = storedUser._id || storedUser.id;
       
+      console.log('👤 Stored user:', storedUser);
+      console.log('🆔 User ID:', userId);
+      
       if (!userId) {
         console.log('⚠️ No user ID for attendance fetch');
         setAttendance([]);
         return;
       }
 
-      // Fetch last 30 days of attendance
+      console.log('📊 Fetching attendance records for user:', userId);
+
+      // Fetch last 30 days of attendance (add high limit to get all records)
       const endDate = new Date().toISOString().split('T')[0];
       const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       
-      const res = await fetch(`/api/attendance?employeeId=${userId}&startDate=${startDate}&endDate=${endDate}`);
-      const data = await res.json();
+      console.log('📅 Date range:', startDate, 'to', endDate);
       
-      if (res.ok && data.attendance) {
-        const records = data.attendance.map(a => ({
+      const apiUrl = `http://localhost:5000/api/attendance?employeeId=${userId}&startDate=${startDate}&endDate=${endDate}&limit=100`;
+      console.log('🌐 API URL:', apiUrl);
+      
+      const res = await fetch(apiUrl, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('workzen_token')}`
+        }
+      });
+      
+      const data = await res.json();
+      console.log('📥 Attendance API response:', data);
+      
+      // Handle different response formats
+      const attendanceRecords = data.data?.attendance || data.attendance || [];
+      
+      if (res.ok && attendanceRecords.length > 0) {
+        const records = attendanceRecords.map(a => ({
           ...a,
           date: a.date ? new Date(a.date).toISOString().split('T')[0] : null,
           day: new Date(a.date).getDate(),
           present: a.status === 'present' || a.status === 'late' ? 1 : 0,
           timeIn: a.checkIn?.time ? new Date(a.checkIn.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null,
-          timeOut: a.checkOut?.time ? new Date(a.checkOut.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null
+          timeOut: a.checkOut?.time ? new Date(a.checkOut.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null,
+          workHours: a.workHours || 0,
+          status: a.status
         }));
         
         setAttendance(records);
-        computeKpisFromAttendance(records);
-        buildChartFromAttendance(records);
         console.log(`✅ Loaded ${records.length} attendance records`);
       } else {
-        console.log('ℹ️ No attendance records found, using empty data');
+        console.log('ℹ️ No attendance records found');
         setAttendance([]);
-        computeKpisFromAttendance([]);
-        buildChartFromAttendance([]);
       }
     } catch (err) {
       console.error('❌ Fetch attendance error:', err);
       setAttendance([]);
-      computeKpisFromAttendance([]);
-      buildChartFromAttendance([]);
+    }
+  }
+
+  // Fetch KPI statistics
+  async function fetchKPIs() {
+    try {
+      const storedUser = JSON.parse(localStorage.getItem('workzen_user') || '{}');
+      const userId = storedUser._id || storedUser.id;
+      
+      if (!userId) {
+        console.log('⚠️ No user ID for KPI fetch');
+        return;
+      }
+
+      console.log('📊 Fetching KPIs for user:', userId);
+
+      // Get current month dates
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const startOfMonth = new Date(year, month, 1).toISOString().split('T')[0];
+      const endOfMonth = new Date(year, month + 1, 0).toISOString().split('T')[0];
+
+      // Fetch attendance records for current month
+      const attendanceRes = await fetch(`http://localhost:5000/api/attendance?employeeId=${userId}&startDate=${startOfMonth}&endDate=${endOfMonth}&limit=100`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('workzen_token')}`
+        }
+      });
+
+      if (attendanceRes.ok) {
+        const attendanceData = await attendanceRes.json();
+        console.log('📥 KPI attendance data:', attendanceData);
+        
+        // Handle different response formats
+        const records = attendanceData.data?.attendance || attendanceData.attendance || [];
+        
+        console.log('📊 Processing', records.length, 'attendance records for KPIs');
+        
+        // Calculate present days (status === 'present')
+        const presentDays = records.filter(r => r.status === 'present').length;
+        
+        // Calculate late days (check-in time after 9:30 AM)
+        const lateDays = records.filter(r => {
+          if (!r.checkIn?.time) return false;
+          const checkInTime = new Date(r.checkIn.time);
+          const hours = checkInTime.getHours();
+          const minutes = checkInTime.getMinutes();
+          return hours > 9 || (hours === 9 && minutes > 30);
+        }).length;
+
+        console.log('✅ Attendance KPIs - Present:', presentDays, 'Late:', lateDays);
+        
+        // Fetch leaves for current month
+        const leavesRes = await fetch(`http://localhost:5000/api/leaves`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('workzen_token')}`
+          }
+        });
+
+        let leavesTaken = 0;
+        if (leavesRes.ok) {
+          const leavesData = await leavesRes.json();
+          const userEmail = storedUser.email;
+          const allLeaves = leavesData.leaves || leavesData.data || [];
+          
+          // Count approved leaves in current month for this user
+          leavesTaken = allLeaves.filter(leave => {
+            const isApproved = leave.status === 'approved';
+            const isCurrentUser = leave.employee?.email === userEmail || leave.userEmail === userEmail;
+            const leaveStart = new Date(leave.startDate);
+            const leaveEnd = new Date(leave.endDate);
+            const monthStart = new Date(startOfMonth);
+            const monthEnd = new Date(endOfMonth);
+            
+            // Check if leave overlaps with current month
+            const overlaps = leaveStart <= monthEnd && leaveEnd >= monthStart;
+            
+            return isApproved && isCurrentUser && overlaps;
+          }).length;
+        }
+
+        console.log('✅ KPIs updated - Present:', presentDays, 'Leaves:', leavesTaken, 'Late:', lateDays);
+        
+        setKpis({
+          present: presentDays,
+          leaves: leavesTaken,
+          late: lateDays,
+          performance: 88 // Keep static for now
+        });
+      }
+    } catch (err) {
+      console.error('❌ Fetch KPIs error:', err);
     }
   }
 
   async function fetchLeaves() {
     try {
       console.log('📋 Fetching leaves from API...');
-      const res = await fetch('/api/leaves');
+      const res = await fetch('http://localhost:5000/api/leaves', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('workzen_token')}`
+        }
+      });
       
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
@@ -335,16 +453,34 @@ function DashboardEmployee() {
         return;
       }
 
-      const today = new Date().toISOString().split('T')[0];
-      const res = await fetch(`/api/attendance?employeeId=${userId}&startDate=${today}&endDate=${today}`);
-      const data = await res.json();
+      console.log('📊 Fetching today\'s attendance for user:', userId);
       
-      if (res.ok && data.attendance && data.attendance.length > 0) {
-        setTodayAttendance(data.attendance[0]);
-        console.log('✅ Today\'s attendance:', data.attendance[0]);
+      const today = new Date().toISOString().split('T')[0];
+      console.log('📅 Today\'s date:', today);
+      
+      const url = `http://localhost:5000/api/attendance?employeeId=${userId}&startDate=${today}&endDate=${today}&limit=10`;
+      console.log('🔗 Fetching from URL:', url);
+      
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('workzen_token')}`
+        }
+      });
+      
+      const data = await res.json();
+      console.log('📥 Today\'s attendance response:', data);
+      console.log('📥 Response status:', res.status, res.ok);
+      
+      // Handle different response formats
+      const todayRecords = data.data?.attendance || data.attendance || [];
+      console.log('📋 Today\'s records found:', todayRecords.length, todayRecords);
+      
+      if (res.ok && todayRecords.length > 0) {
+        setTodayAttendance(todayRecords[0]);
+        console.log('✅ Today\'s attendance SET TO STATE:', todayRecords[0]);
       } else {
         setTodayAttendance(null);
-        console.log('ℹ️ No attendance marked today');
+        console.log('ℹ️ No attendance marked today - STATE SET TO NULL');
       }
     } catch (err) {
       console.error('❌ Fetch today attendance error:', err);
@@ -402,14 +538,23 @@ function DashboardEmployee() {
       
       if (!res.ok) {
         console.error('❌ Server error response:', data);
-        throw new Error(data.message || data.error || 'Check-in failed');
+        
+        // If already checked in, fetch today's attendance to update UI
+        if (data.message && data.message.includes('Already checked in')) {
+          await fetchTodayAttendance();
+          alert('ℹ️ You have already checked in today');
+        } else {
+          throw new Error(data.message || data.error || 'Check-in failed');
+        }
+        return;
       }
 
       setTodayAttendance(data.data?.attendance || data.attendance || data);
       alert('✅ Checked in successfully!');
       
-      // Refresh attendance list
+      // Refresh attendance list and KPIs
       fetchAttendance();
+      fetchKPIs();
       
     } catch (err) {
       console.error('❌ Check-in error:', err);
@@ -478,8 +623,9 @@ function DashboardEmployee() {
       setTodayAttendance(data.data?.attendance || data.attendance || data);
       alert('✅ Checked out successfully!');
       
-      // Refresh attendance list
+      // Refresh attendance list and KPIs
       fetchAttendance();
+      fetchKPIs();
       
     } catch (err) {
       console.error('❌ Check-out error:', err);
@@ -511,8 +657,7 @@ function DashboardEmployee() {
           <p className="text-xs text-gray-400 mt-1">Employee</p>
         </div>
         <nav className="flex-1 p-4 space-y-2">
-          <motion.button onClick={() => setActiveMenu('Dashboard')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Dashboard' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Users className="w-5 h-5" /><span className="font-medium">Dashboard</span></motion.button>
-          <motion.button onClick={() => setActiveMenu('Attendance')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Attendance' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Clock className="w-5 h-5" /><span className="font-medium">Attendance</span></motion.button>
+          <motion.button onClick={() => setActiveMenu('Dashboard')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Dashboard' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Clock className="w-5 h-5" /><span className="font-medium">Dashboard</span></motion.button>
           <motion.button onClick={() => setActiveMenu('Time Off')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Time Off' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Calendar className="w-5 h-5" /><span className="font-medium">Time Off</span></motion.button>
         </nav>
       </motion.aside>
@@ -565,24 +710,8 @@ function DashboardEmployee() {
               {/* <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><div className="flex items-center justify-between"><div><p className="text-gray-400 text-sm">Performance</p><h3 className="text-3xl font-bold text-white mt-2">{kpis.performance}%</h3></div><div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center"><UserIcon className="w-6 h-6 text-primary" /></div></div></motion.div> */}
             </div>
 
-            {/* <div className="mb-6 flex items-center gap-4"><button onClick={() => setActiveMenu('Employees')} className={`px-4 py-2 rounded-lg ${activeMenu === 'Employees' ? 'bg-primary text-white' : 'bg-gray-800 text-gray-300'}`}>Directory</button><button onClick={() => setActiveMenu('Attendance')} className={`px-4 py-2 rounded-lg ${activeMenu === 'Attendance' ? 'bg-primary text-white' : 'bg-gray-800 text-gray-300'}`}>Attendance</button><button onClick={() => setActiveMenu('Time Off')} className={`px-4 py-2 rounded-lg ${activeMenu === 'Time Off' ? 'bg-primary text-white' : 'bg-gray-800 text-gray-300'}`}>Time Off</button></div> */}
-
             <div>
-              {activeMenu === 'Employees' && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
-                  {/* <h2 className="text-xl font-semibold text-white mb-6">Employee Directory</h2> */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredDirectory.map((emp, idx) => (
-                      <motion.button key={emp.id || idx} whileHover={{ y: -4 }} onClick={() => { setSelectedEmployee(emp); setShowEmployeePanel(true); }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6 text-left cursor-pointer">
-                        <div className="flex items-center gap-4">                        <div className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-xl">{(emp.name||'U').split(' ').map(n=>n[0]).join('').toUpperCase()}</div><div><h3 className="text-lg font-semibold text-white">{emp.name || 'Unknown User'}</h3><p className="text-gray-400 text-sm">{emp.role || emp.title || 'Employee'}</p><p className="text-gray-500 text-xs mt-1">{emp.email}</p></div></div>
-                      </motion.button>
-                    ))}
-                    {/* {filteredDirectory.length === 0 && <div className="text-gray-400">No employees found.</div>} */}
-                  </div>
-                </motion.div>
-              )}
-
-              {activeMenu === 'Attendance' && (
+              {activeMenu === 'Dashboard' && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-semibold text-white">My Attendance</h2>
@@ -613,11 +742,7 @@ function DashboardEmployee() {
                       <div className="flex flex-col gap-3">
                         {todayAttendance ? (
                           <>
-                            <div className="text-center">
-                              <div className="flex items-center gap-2 text-green-400 mb-2">
-                                <CheckCircle className="w-5 h-5" />
-                                <span className="font-semibold">Checked In</span>
-                              </div>
+                            <div className="text-center mb-2">
                               <p className="text-gray-300 text-sm">
                                 Check-in: {todayAttendance.checkIn?.time ? new Date(todayAttendance.checkIn.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                               </p>
@@ -632,6 +757,17 @@ function DashboardEmployee() {
                                 </p>
                               )}
                             </div>
+                            
+                            {/* Show Already Checked In button (disabled, grey) */}
+                            <button
+                              disabled
+                              className="bg-gray-700 border-2 border-gray-600 text-gray-400 px-6 py-3 rounded-lg font-semibold flex items-center gap-2 justify-center cursor-not-allowed"
+                            >
+                              <CheckCircle className="w-5 h-5" />
+                              Already Checked In
+                            </button>
+                            
+                            {/* Show Check Out button if not checked out yet */}
                             {!todayAttendance.checkOut && (
                               <button
                                 onClick={checkOut}
@@ -642,13 +778,17 @@ function DashboardEmployee() {
                                 {checkingOut ? 'Checking Out...' : 'Check Out'}
                               </button>
                             )}
+                            
+                            {/* Show completed status when both check-in and check-out are done */}
                             {todayAttendance.checkOut && (
-                              <div className="text-green-400 text-center font-semibold">
+                              <div className="bg-green-600/20 border-2 border-green-500 text-green-400 px-6 py-3 rounded-lg font-semibold text-center flex items-center gap-2 justify-center">
+                                <CheckCircle className="w-5 h-5" />
                                 ✓ Attendance Complete
                               </div>
                             )}
                           </>
                         ) : (
+                          // Show Check In button when not checked in yet
                           <button
                             onClick={checkIn}
                             disabled={checkingIn}

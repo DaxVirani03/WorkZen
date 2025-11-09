@@ -107,7 +107,21 @@ router.post('/', [
     
     // Handle duplicate key error (E11000)
     if (error.code === 11000) {
-      const employeeName = employee ? (employee.name || `${employee.firstName} ${employee.lastName}`) : 'this employee';
+      // Extract employee ID from the error or request body
+      const employeeId = req.body.employee;
+      let employeeName = 'this employee';
+      
+      // Try to fetch employee name for better error message
+      try {
+        const employee = await User.findById(employeeId);
+        if (employee) {
+          employeeName = employee.name || `${employee.firstName || ''} ${employee.lastName || ''}`.trim() || `Employee ID: ${employeeId}`;
+        }
+      } catch (err) {
+        // If we can't fetch employee, use generic message
+        employeeName = `Employee ID: ${employeeId}`;
+      }
+      
       const startDate = req.body.payPeriod?.startDate || 'N/A';
       const endDate = req.body.payPeriod?.endDate || 'N/A';
       
@@ -198,14 +212,8 @@ router.get('/stats', async (req, res) => {
       isActive: true
     });
 
-    // Payruns completed (processed payrolls in current month)
-    const payruns = await Payroll.countDocuments({
-      paymentStatus: { $in: ['processed', 'paid'] },
-      payDate: {
-        $gte: new Date(currentYear, currentMonth, 1),
-        $lt: new Date(currentYear, currentMonth + 1, 1)
-      }
-    });
+    // Total payslips generated (all time - count of all payroll records)
+    const payruns = await Payroll.countDocuments();
 
     // Pending leave approvals
     const LeaveRequest = require('../models/LeaveRequest');

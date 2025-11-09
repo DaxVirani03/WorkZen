@@ -238,12 +238,40 @@ function DashboardAdmin() {
 
   // Calculate summary metrics
   const getEmployeeStatus = (employee) => {
-    const today = todayAttendance.find(a => 
-      a.employee?._id === employee._id || a.employee === employee._id
-    );
+    // Check if employee is on approved leave today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     
-    if (!today) return 'absent';
-    return today.status || 'present';
+    const onLeave = leaveRequests.some(l => {
+      if (l.status !== 'Approved') return false;
+      const from = new Date(l.from || l.startDate);
+      const to = new Date(l.to || l.endDate);
+      from.setHours(0, 0, 0, 0);
+      to.setHours(23, 59, 59, 999);
+      
+      // Check if employee matches (handle both populated and non-populated)
+      const leaveEmployeeId = l.employee?._id || l.employee?.id || l.employee;
+      const currentEmployeeId = employee._id || employee.id;
+      
+      return leaveEmployeeId?.toString() === currentEmployeeId?.toString() && 
+             today >= from && today <= to;
+    });
+    
+    if (onLeave) return 'leave';
+    
+    // Check if employee has attendance today
+    const todayRecord = todayAttendance.find(a => {
+      const attendanceEmployeeId = a.employee?._id || a.employee?.id || a.employee;
+      const currentEmployeeId = employee._id || employee.id;
+      return attendanceEmployeeId?.toString() === currentEmployeeId?.toString();
+    });
+    
+    if (todayRecord) {
+      return todayRecord.status || 'present';
+    }
+    
+    // No attendance and no leave = absent
+    return 'absent';
   };
 
   const totalEmployees = employees.length;
@@ -729,8 +757,39 @@ function DashboardAdmin() {
 
                       {/* Employee Info */}
                       <h3 className="text-lg font-semibold text-white">{fullName}</h3>
-                      <p className="text-gray-400 text-sm mt-1">{employee.position || employee.title}</p>
-                      <p className="text-gray-500 text-xs mt-1">{employee.department}</p>
+                      <p className="text-gray-400 text-sm mt-1">{employee.position || employee.title || employee.role}</p>
+                      <p className="text-gray-500 text-xs mt-1 flex items-center gap-1">
+                        <Building2 className="w-3 h-3" />
+                        {employee.department || 'N/A'}
+                      </p>
+                      
+                      {/* Additional Details */}
+                      <div className="mt-4 pt-4 border-t border-gray-700 space-y-2">
+                        {employee.email && (
+                          <p className="text-gray-400 text-xs flex items-center gap-2">
+                            <Mail className="w-3 h-3" />
+                            {employee.email}
+                          </p>
+                        )}
+                        {employee.phone && (
+                          <p className="text-gray-400 text-xs flex items-center gap-2">
+                            <Phone className="w-3 h-3" />
+                            {employee.phone}
+                          </p>
+                        )}
+                        {employee.employeeId && (
+                          <p className="text-gray-400 text-xs flex items-center gap-2">
+                            <UserIcon className="w-3 h-3" />
+                            ID: {employee.employeeId}
+                          </p>
+                        )}
+                        {employee.joinDate && (
+                          <p className="text-gray-400 text-xs flex items-center gap-2">
+                            <Calendar className="w-3 h-3" />
+                            Joined: {new Date(employee.joinDate).toLocaleDateString()}
+                          </p>
+                        )}
+                      </div>
                     </motion.div>
                   );
                 })}

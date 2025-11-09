@@ -197,8 +197,14 @@ function NewPayslipModal({ show, onClose, onSubmit }) {
   };
 
   const handleInputChange = (field, value) => {
-    const numValue = parseFloat(value) || 0;
-    setFormData(prev => ({ ...prev, [field]: numValue }));
+    // For date fields, keep the string value
+    if (field === 'payPeriodStart' || field === 'payPeriodEnd' || field === 'payDate') {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    } else {
+      // For numeric fields, parse to number
+      const numValue = parseFloat(value) || 0;
+      setFormData(prev => ({ ...prev, [field]: numValue }));
+    }
   };
 
   const computePayslip = () => {
@@ -479,8 +485,11 @@ Click OK to confirm and save.
       const data = await response.json();
 
       if (response.ok && data.success) {
-        alert('✅ Payslip created successfully!');
-        onSubmit && onSubmit(data.payroll);
+        // Success! Call parent's onSubmit callback
+        if (onSubmit) {
+          onSubmit(data.payroll);
+        }
+        // Close and reset the modal
         handleClose();
       } else {
         // Handle specific error messages
@@ -496,8 +505,12 @@ Click OK to confirm and save.
     } catch (error) {
       console.error('Error creating payslip:', error);
       
+      // Check if it's a network/fetch error
+      if (error.message === 'Failed to fetch' || error instanceof TypeError) {
+        alert('❌ Connection Error!\n\nCannot connect to the server. Please ensure:\n• Backend server is running on http://localhost:5000\n• You have internet connection\n• No firewall is blocking the request');
+      }
       // Check if it's a duplicate error from server
-      if (error.message && (error.message.includes('duplicate') || error.message.includes('E11000'))) {
+      else if (error.message && (error.message.includes('duplicate') || error.message.includes('E11000'))) {
         alert(`❌ Duplicate Payslip Error!\n\nA payslip already exists for this employee for the selected period.\n\nPlease:\n• Select a different employee, OR\n• Change the pay period dates`);
       } else {
         alert('❌ Error creating payslip: ' + error.message);
@@ -536,15 +549,14 @@ Click OK to confirm and save.
     onClose();
   };
 
-  if (!show) return null;
-
   return (
     <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
+      {show && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
         onClick={handleClose}
       >
         <motion.div
@@ -863,6 +875,7 @@ Click OK to confirm and save.
           </div>
         </motion.div>
       </motion.div>
+      )}
     </AnimatePresence>
   );
 }

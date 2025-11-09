@@ -3,7 +3,9 @@
  * Centralized API service for all backend communication
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Use relative URL to leverage Vite proxy in development
+// In production, set VITE_API_URL to your backend URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 /**
  * Generic API request handler
@@ -264,47 +266,48 @@ export const leaveAPI = {
 };
 
 // ==================== LEAVE REQUESTS (User-based) ====================
+// Note: Backend uses /api/leaves endpoint (matches server.js routing)
 
 export const leaveRequestAPI = {
   getAll: (params = {}) => {
     const queryString = new URLSearchParams(params).toString();
-    return apiRequest(`/leave-requests${queryString ? `?${queryString}` : ''}`);
+    return apiRequest(`/leaves${queryString ? `?${queryString}` : ''}`);
   },
 
-  getById: (id) => apiRequest(`/leave-requests/${id}`),
+  getById: (id) => apiRequest(`/leaves/${id}`),
 
   create: (requestData) =>
-    apiRequest('/leave-requests', {
+    apiRequest('/leaves', {
       method: 'POST',
       body: JSON.stringify(requestData),
     }),
 
   update: (id, requestData) =>
-    apiRequest(`/leave-requests/${id}`, {
+    apiRequest(`/leaves/${id}`, {
       method: 'PUT',
       body: JSON.stringify(requestData),
     }),
 
   delete: (id) =>
-    apiRequest(`/leave-requests/${id}`, {
+    apiRequest(`/leaves/${id}`, {
       method: 'DELETE',
     }),
 
   approve: (id, comments) =>
-    apiRequest(`/leave-requests/${id}/approve`, {
-      method: 'PATCH',
-      body: JSON.stringify({ comments }),
+    apiRequest(`/leaves/${id}/approve`, {
+      method: 'PUT',
+      body: JSON.stringify({ comments, status: 'Approved' }),
     }),
 
   reject: (id, comments) =>
-    apiRequest(`/leave-requests/${id}/reject`, {
-      method: 'PATCH',
-      body: JSON.stringify({ comments }),
+    apiRequest(`/leaves/${id}/reject`, {
+      method: 'PUT',
+      body: JSON.stringify({ comments, status: 'Rejected' }),
     }),
 
-  getPending: () => apiRequest('/leave-requests?status=Pending'),
+  getPending: () => apiRequest('/leaves?status=Pending'),
 
-  getMyRequests: () => apiRequest('/leave-requests/my'),
+  getMyRequests: () => apiRequest('/leaves/my'),
 };
 
 // ==================== PAYROLL ====================

@@ -171,9 +171,16 @@ router.get('/', async (req, res) => {
     }
 
     if (req.query.startDate && req.query.endDate) {
+      // Create date objects at start and end of day to handle timezone issues
+      const startDate = new Date(req.query.startDate);
+      startDate.setHours(0, 0, 0, 0);
+      
+      const endDate = new Date(req.query.endDate);
+      endDate.setHours(23, 59, 59, 999);
+      
       filter.date = {
-        $gte: new Date(req.query.startDate),
-        $lte: new Date(req.query.endDate)
+        $gte: startDate,
+        $lte: endDate
       };
     }
 
@@ -207,6 +214,37 @@ router.get('/', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error retrieving attendance records'
+    });
+  }
+});
+
+// @route   GET /api/attendance/today
+// @desc    Get today's attendance records for all employees
+// @access  Private
+router.get('/today', async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayAttendance = await Attendance.find({
+      date: { $gte: today, $lt: tomorrow }
+    })
+      .populate('employee', 'firstName lastName employeeId department email')
+      .sort({ 'checkIn.time': -1 });
+
+    res.json({
+      success: true,
+      data: todayAttendance
+    });
+
+  } catch (error) {
+    console.error('Get today attendance error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error retrieving today\'s attendance'
     });
   }
 });
@@ -349,6 +387,79 @@ router.put('/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error updating attendance record'
+    });
+  }
+});
+
+// @route   GET /api/attendance/stats/by-department
+// @desc    Get attendance statistics grouped by department
+// @access  Private (Payroll Officer, HR Officer, Admin)
+router.get('/stats/by-department', async (req, res) => {
+  try {
+    console.log('📊 Fetching attendance stats by department...');
+
+    // Get all active employees grouped by department
+    const departments = await User.aggregate([
+      {
+        $match: {
+          role: { $in: ['Employee', 'HR Officer', 'Payroll Officer', 'Admin'] },
+          isActive: true,
+          department: { $exists: true, $ne: null }
+        }
+      },
+      {
+        $group: {
+          _id: '$department',
+          totalEmployees: { $sum: 1 }
+        }
+      }
+    ]);
+
+    console.log('👥 Departments found:', departments);
+
+    // Get today's date range
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Get attendance stats for each department
+    const attendanceStats = await Promise.all(
+      departments.map(async (dept) => {
+        // Count present employees (checked in today)
+        const presentCount = await Attendance.countDocuments({
+          date: { $gte: today, $lt: tomorrow },
+          status: 'present',
+          employee: {
+            $in: await User.find({ department: dept._id, isActive: true }).distinct('_id')
+          }
+        });
+
+        const total = dept.totalEmployees;
+        const percentage = total > 0 ? Math.round((presentCount / total) * 100) : 0;
+
+        return {
+          department: dept._id,
+          present: presentCount,
+          total: total,
+          percentage: percentage
+        };
+      })
+    );
+
+    console.log('✅ Attendance stats by department:', attendanceStats);
+
+    res.json({
+      success: true,
+      data: attendanceStats
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching attendance stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching attendance statistics',
+      error: error.message
     });
   }
 });
