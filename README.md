@@ -1,25 +1,49 @@
-# WorkZen HRMS - Complete MERN Stack Application
+# 📊 WorkZen – Smart Human Resource Management System
 
-A comprehensive Human Resource Management System built with the MERN stack (MongoDB, Express.js, React/Next.js, Node.js). Features a modern, responsive landing page with dark/light theme toggle and a complete backend API for HR operations.
+WorkZen is a modular, scalable HRMS platform designed to simplify and modernize HR operations for startups, institutions, and SMEs. It integrates core HR functionalities—attendance, leave, payroll, and analytics—into a unified, user-friendly interface.
 
-## 🚀 Features
+## 🚀 Vision & Mission
 
-### Frontend (Next.js)
-- **Modern Landing Page**: 14-section responsive landing page with Zoho-inspired design
-- **Dark/Light Theme Toggle**: Seamless theme switching with persistent preferences
-- **Responsive Design**: Mobile-first approach with Tailwind CSS
-- **Smooth Animations**: Framer Motion and GSAP animations
-- **Interactive Components**: Charts, testimonials carousel, pricing tables
-- **SEO Optimized**: Meta tags and structured data
+WorkZen empowers organizations to:
+- Reduce manual HR tasks
+- Improve transparency and collaboration
+- Make data-driven workforce decisions
+- Deliver a clean and reliable experience for employees and administrators
 
-### Backend (Express.js + MongoDB)
-- **Employee Management**: Complete CRUD operations for employee data
-- **Attendance Tracking**: Real-time check-in/check-out with geolocation
-- **Leave Management**: Automated leave applications and approvals
-- **Payroll Processing**: Comprehensive payroll calculations and processing
-- **Dashboard Analytics**: Real-time insights and reporting
-- **Authentication**: JWT-based authentication with role-based access
-- **API Documentation**: RESTful API endpoints with validation
+---
+
+## 🧩 Core Modules
+
+### 🔐 User & Role Management
+- Secure registration and login
+- Role-based access: Employee, HR Officer, Admin, Payroll Officer
+- Editable user profiles
+
+### ⏱️ Attendance & Leave Management
+- Daily/monthly attendance tracking
+- Leave application, approval, and rejection workflows
+
+### 💰 Payroll Management
+- Salary breakdown, deductions, and payout summaries
+- Monthly payslip generation and editing (Admin/Payroll Officer)
+
+### 📈 Dashboard & Analytics
+- Visual summaries of attendance, leave, and payroll metrics
+- Admin overview of employee data and HR statistics
+
+---
+
+## 📚 Key Terminologies
+
+- **Payroll**: Salary processing based on attendance and leave
+- **Payrun**: Payroll cycle for salary disbursement
+- **Payslip**: Document showing salary breakdown
+- **Time-Off**: Approved absence from work
+- **Wage**: Compensation based on work hours and attendance
+- **PF Contribution**: 12% of basic salary from employee and employer
+- **Professional Tax**: State-imposed monthly tax deducted from salary
+
+---
 
 ## 🛠 Tech Stack
 
@@ -352,7 +376,7 @@ The application is fully responsive and works seamlessly on:
 - Mobile phones
 - Different screen sizes and orientations
 
-## 🔒 Security Features
+  ## 🔒 Security Features
 
 - JWT authentication with expiration
 - Password hashing with bcrypt
@@ -369,6 +393,29 @@ The application is fully responsive and works seamlessly on:
 - Database indexing for fast queries
 - Caching strategies
 - Compression middleware
+
+  ## 📦 Deliverables
+
+- ✅ Fully functional HRMS system
+- 📁 Source code hosted on Git repository with meaningful commits
+- 📊 Integrated dashboard with analytics
+- 🧪 Real-world ERP workflows and business logic implementation
+
+---
+
+## 🧠 Why This Project Matters
+
+- Learn how HR modules interact (e.g., Attendance → Payroll)
+- Practice real-world problem solving beyond just coding
+- Build scalable, maintainable ERP systems
+
+---
+
+## 🖼️ Mockup
+
+Explore the UI mockup: [Excalidraw Link](https://link.excalidraw.com/l/65VNwvy7c4X/7gxoB8JymIS)
+
+---
 
 ## 🤝 Contributing
 
@@ -388,17 +435,6 @@ For support and questions:
 - Create an issue on GitHub
 - Contact the development team
 - Check the documentation in the `docs/` folder
-
-## 🎯 Roadmap
-
-- [ ] Mobile app development
-- [ ] Advanced reporting and analytics
-- [ ] Integration with third-party services
-- [ ] Multi-language support
-- [ ] Advanced workflow automation
-- [ ] API rate limiting and caching
-- [ ] Real-time notifications
-- [ ] Document management system
 
 ---
 
