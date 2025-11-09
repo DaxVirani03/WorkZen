@@ -159,27 +159,6 @@ export default function LandingPage() {
             </button>
           </motion.div>
 
-          {/* Stats */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1, delay: 1 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto"
-          >
-            {[
-              { icon: Users, value: '10K+', label: 'Active Companies' },
-              { icon: TrendingUp, value: '99.9%', label: 'Uptime' },
-              { icon: Shield, value: 'ISO 27001', label: 'Certified' },
-              { icon: Star, value: '4.9/5', label: 'Rating' },
-            ].map((stat, index) => (
-              <div key={index} className="text-center">
-                <stat.icon className="w-8 h-8 mx-auto mb-2 text-primary-500" />
-                <div className="text-3xl font-bold mb-1">{stat.value}</div>
-                <div className="text-sm text-gray-400">{stat.label}</div>
-              </div>
-            ))}
-          </motion.div>
-
           {/* Scroll indicator */}
           <motion.button
             onClick={() => scrollToSection('built-for-people')}
