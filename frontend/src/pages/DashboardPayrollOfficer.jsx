@@ -37,7 +37,7 @@ import {
   DollarSign, Plane, Clock, FileText, Search, ChevronDown,
   User as UserIcon, LogOut, Check, X, Filter, Download,
   PlayCircle, TrendingUp, Users, Calendar, AlertCircle,
-  Eye, Save, FileDown, BarChart3
+  Eye, Save, FileDown, BarChart3, IndianRupee
 } from 'lucide-react';
 import { 
   Chart as ChartJS, CategoryScale, LinearScale, BarElement, 
@@ -776,7 +776,7 @@ function DashboardPayrollOfficer() {
               whileHover={{ y: -4, boxShadow: '0 20px 40px rgba(0, 94, 184, 0.2)' }}
               className="bg-gray-900/50 border border-gray-800 rounded-xl p-6"
             >
-              <DollarSign className="w-8 h-8 text-primary mb-3" />
+              <IndianRupee className="w-8 h-8 text-primary mb-3" />
               <p className="text-gray-400 text-sm mb-1">Current Month Payroll</p>
               <p className="text-3xl font-bold text-white">₹{(currentMonthPayroll / 1000).toFixed(1)}K</p>
             </motion.div>
