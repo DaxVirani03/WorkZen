@@ -2,6 +2,7 @@
 
 WorkZen is a modular, scalable HRMS platform designed to simplify and modernize HR operations for startups, institutions, and SMEs. It integrates core HR functionalities—attendance, leave, payroll, and analytics—into a unified, user-friendly interface.
 
+
 ## 🚀 Vision & Mission
 
 WorkZen empowers organizations to:
@@ -9,8 +10,6 @@ WorkZen empowers organizations to:
 - Improve transparency and collaboration
 - Make data-driven workforce decisions
 - Deliver a clean and reliable experience for employees and administrators
-
----
 
 ## 🧩 Core Modules
 
@@ -31,8 +30,6 @@ WorkZen empowers organizations to:
 - Visual summaries of attendance, leave, and payroll metrics
 - Admin overview of employee data and HR statistics
 
----
-
 ## 📚 Key Terminologies
 
 - **Payroll**: Salary processing based on attendance and leave
@@ -42,8 +39,6 @@ WorkZen empowers organizations to:
 - **Wage**: Compensation based on work hours and attendance
 - **PF Contribution**: 12% of basic salary from employee and employer
 - **Professional Tax**: State-imposed monthly tax deducted from salary
-
----
 
 ## 🛠 Tech Stack
 
@@ -401,21 +396,15 @@ The application is fully responsive and works seamlessly on:
 - 📊 Integrated dashboard with analytics
 - 🧪 Real-world ERP workflows and business logic implementation
 
----
-
 ## 🧠 Why This Project Matters
 
 - Learn how HR modules interact (e.g., Attendance → Payroll)
 - Practice real-world problem solving beyond just coding
 - Build scalable, maintainable ERP systems
 
----
-
 ## 🖼️ Mockup
 
 Explore the UI mockup: [Excalidraw Link](https://link.excalidraw.com/l/65VNwvy7c4X/7gxoB8JymIS)
-
----
 
 ## 🤝 Contributing
 
