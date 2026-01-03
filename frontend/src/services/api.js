@@ -205,6 +205,19 @@ export const attendanceAPI = {
     const queryString = new URLSearchParams(params).toString();
     return apiRequest(`/attendance/stats${queryString ? `?${queryString}` : ''}`);
   },
+
+  // Admin-only functions to mark attendance for any user
+  adminCheckIn: (userId, data) =>
+    apiRequest(`/attendance/admin/check-in/${userId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  adminCheckOut: (userId, data) =>
+    apiRequest(`/attendance/admin/check-out/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 };
 
 // ==================== LEAVES / TIME OFF ====================

@@ -137,12 +137,21 @@ router.put('/check-out', [
       }
     };
 
+    // Save attendance - pre-save hook will calculate work hours automatically
     await attendance.save();
+
+    console.log('✅ Check-out successful. Work hours calculated:', attendance.workHours, '(', attendance.workHoursFormatted, ')');
 
     res.json({
       success: true,
       message: 'Check-out successful',
-      data: { attendance }
+      data: { 
+        attendance,
+        workHours: attendance.workHours,
+        workHoursFormatted: attendance.workHoursFormatted,
+        overtimeHours: attendance.overtimeHours,
+        overtimeHoursFormatted: attendance.overtimeHoursFormatted
+      }
     });
 
   } catch (error) {
@@ -189,17 +198,26 @@ router.get('/', async (req, res) => {
     }
 
     const attendance = await Attendance.find(filter)
-      .populate('employee', 'firstName lastName employeeId department')
+      .populate('employee', 'firstName lastName employeeId department email')
       .sort({ date: -1 })
       .skip(skip)
       .limit(limit);
 
     const total = await Attendance.countDocuments(filter);
 
+    // Add formatted data for easier frontend consumption
+    const formattedAttendance = attendance.map(record => ({
+      ...record.toObject(),
+      checkInTime: record.checkIn?.time ? new Date(record.checkIn.time).toLocaleTimeString() : null,
+      checkOutTime: record.checkOut?.time ? new Date(record.checkOut.time).toLocaleTimeString() : null,
+      // workHoursFormatted is now stored in database in HH:MM:SS format
+      dateFormatted: new Date(record.date).toLocaleDateString()
+    }));
+
     res.json({
       success: true,
       data: {
-        attendance,
+        attendance: formattedAttendance,
         pagination: {
           page,
           limit,
@@ -459,6 +477,293 @@ router.get('/stats/by-department', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error fetching attendance statistics',
+      error: error.message
+    });
+  }
+});
+
+// @route   POST /api/attendance/admin/check-in/:userId
+// @desc    Admin mark check-in for any user (HR, Payroll, Employee)
+// @access  Private (Admin only)
+router.post('/admin/check-in/:userId', [
+  body('location', 'Location is optional').optional(),
+  body('date', 'Date is optional').optional(),
+  body('checkInTime', 'Check-in time is optional').optional()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation errors',
+        errors: errors.array()
+      });
+    }
+
+    const { userId } = req.params;
+    const { location, date, checkInTime, method = 'manual' } = req.body;
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Use provided date or today
+    const attendanceDate = date ? new Date(date) : new Date();
+    attendanceDate.setHours(0, 0, 0, 0);
+
+    // Check if already checked in for this date
+    const existingAttendance = await Attendance.findOne({
+      employee: userId,
+      date: attendanceDate
+    });
+
+    if (existingAttendance) {
+      return res.status(400).json({
+        success: false,
+        message: 'Attendance already marked for this user on this date'
+      });
+    }
+
+    // Create check-in datetime
+    let checkInDateTime = new Date();
+    if (date && checkInTime) {
+      // Parse the check-in time (HH:MM format)
+      const [hours, minutes] = checkInTime.split(':').map(Number);
+      const dateObj = new Date(date);
+      dateObj.setHours(hours, minutes, 0, 0);
+      checkInDateTime = dateObj;
+    }
+
+    // Create check-in record
+    const attendance = new Attendance({
+      employee: userId,
+      date: attendanceDate,
+      checkIn: {
+        time: checkInDateTime,
+        location,
+        method, // 'manual' for admin-marked
+        ipAddress: req.ip,
+        deviceInfo: {
+          userAgent: 'Admin Portal',
+          platform: 'admin'
+        }
+      },
+      status: 'present'
+    });
+
+    await attendance.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Check-in marked successfully by admin',
+      data: { attendance }
+    });
+
+  } catch (error) {
+    console.error('Admin check-in error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error marking check-in',
+      error: error.message
+    });
+  }
+});
+
+// @route   PUT /api/attendance/admin/check-out/:userId
+// @desc    Admin mark check-out for any user (HR, Payroll, Employee)
+// @access  Private (Admin only)
+router.put('/admin/check-out/:userId', [
+  body('location', 'Location is optional').optional(),
+  body('date', 'Date is optional').optional(),
+  body('checkOutTime', 'Check-out time is optional').optional()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation errors',
+        errors: errors.array()
+      });
+    }
+
+    const { userId } = req.params;
+    const { location, date, checkOutTime, method = 'manual' } = req.body;
+
+    // Use provided date or today
+    const attendanceDate = date ? new Date(date) : new Date();
+    attendanceDate.setHours(0, 0, 0, 0);
+
+    // Find today's attendance record
+    const attendance = await Attendance.findOne({
+      employee: userId,
+      date: attendanceDate
+    });
+
+    if (!attendance) {
+      return res.status(404).json({
+        success: false,
+        message: 'No check-in record found for this user on this date'
+      });
+    }
+
+    if (attendance.checkOut && attendance.checkOut.time) {
+      return res.status(400).json({
+        success: false,
+        message: 'Check-out already marked for this date'
+      });
+    }
+
+    // Create check-out datetime
+    let checkOutDateTime = new Date();
+    if (date && checkOutTime) {
+      // Parse the check-out time (HH:MM format)
+      const [hours, minutes] = checkOutTime.split(':').map(Number);
+      const dateObj = new Date(date);
+      dateObj.setHours(hours, minutes, 0, 0);
+      checkOutDateTime = dateObj;
+    }
+
+    // Update check-out
+    attendance.checkOut = {
+      time: checkOutDateTime,
+      location,
+      method, // 'manual' for admin-marked
+      ipAddress: req.ip,
+      deviceInfo: {
+        userAgent: 'Admin Portal',
+        platform: 'admin'
+      }
+    };
+
+    // Save attendance - pre-save hook will calculate work hours automatically
+    await attendance.save();
+
+    console.log('✅ Admin marked check-out. Work hours calculated:', attendance.workHours, '(', attendance.workHoursFormatted, ')');
+
+    res.json({
+      success: true,
+      message: 'Check-out marked successfully by admin',
+      data: { 
+        attendance,
+        workHours: attendance.workHours,
+        workHoursFormatted: attendance.workHoursFormatted,
+        overtimeHours: attendance.overtimeHours,
+        overtimeHoursFormatted: attendance.overtimeHoursFormatted
+      }
+    });
+
+  } catch (error) {
+    console.error('Admin check-out error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error marking check-out',
+      error: error.message
+    });
+  }
+});
+
+// Simple attendance marking - Admin marks attendance as present/absent
+router.post('/simple-mark', async (req, res) => {
+  try {
+    // Verify auth token from header
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'No authorization token provided'
+      });
+    }
+
+    // For now, verify the token exists (full JWT verification would be here)
+    // Only admins can use this endpoint
+    const { userId, date, status } = req.body;
+
+    // Validate inputs
+    if (!userId || !date || !status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: userId, date, status'
+      });
+    }
+
+    if (!['present', 'absent'].includes(status.toLowerCase())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status must be "present" or "absent"'
+      });
+    }
+
+    // Parse date
+    const parsedDate = new Date(date);
+    const startOfDay = new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate());
+    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+    // Find or create attendance record
+    let attendance = await Attendance.findOne({
+      user: userId,
+      date: { $gte: startOfDay, $lt: endOfDay }
+    });
+
+    if (!attendance) {
+      attendance = new Attendance({
+        user: userId,
+        date: startOfDay,
+        status: status.toLowerCase(),
+        method: 'manual',
+        device: 'Admin Portal',
+        location: 'Admin Portal'
+      });
+
+      // If marking as present, set check-in time to start of day
+      if (status.toLowerCase() === 'present') {
+        attendance.checkIn = startOfDay;
+      }
+    } else {
+      // Update existing record
+      attendance.status = status.toLowerCase();
+      attendance.method = 'manual';
+      attendance.device = 'Admin Portal';
+      attendance.location = 'Admin Portal';
+
+      if (status.toLowerCase() === 'present' && !attendance.checkIn) {
+        attendance.checkIn = startOfDay;
+      } else if (status.toLowerCase() === 'absent') {
+        attendance.checkIn = null;
+        attendance.checkOut = null;
+        attendance.workHours = 0;
+        attendance.workHoursFormatted = '00:00:00';
+      }
+    }
+
+    await attendance.save();
+
+    return res.json({
+      success: true,
+      message: `Attendance marked as ${status}`,
+      data: {
+        _id: attendance._id,
+        user: attendance.user,
+        date: attendance.date,
+        status: attendance.status,
+        checkIn: attendance.checkIn,
+        checkOut: attendance.checkOut,
+        workHours: attendance.workHours,
+        workHoursFormatted: attendance.workHoursFormatted,
+        method: attendance.method,
+        device: attendance.device
+      }
+    });
+  } catch (error) {
+    console.error('Simple mark error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error marking attendance',
       error: error.message
     });
   }

@@ -205,6 +205,7 @@ function DashboardPayrollOfficer() {
           employeeId: p.employee?._id || p.employee,
           name: p.employee?.name || `${p.employee?.firstName || ''} ${p.employee?.lastName || ''}`.trim() || 'Unknown',
           department: p.employee?.department || 'N/A',
+          role: p.employee?.role || p.role || 'Employee', // Store role for filtering
           baseSalary: p.basicSalary || 0,
           grossEarnings: p.grossEarnings || 0,
           deductions: (p.deductions?.tax?.incomeTax || 0) + 
@@ -528,6 +529,175 @@ function DashboardPayrollOfficer() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // Export report as PDF
+  const handleExportPDF = (report) => {
+    if (!report) {
+      showToast('Report data not available', 'error');
+      return;
+    }
+
+    const WindowPrint = window.open('', '', 'width=900,height=650');
+    
+    WindowPrint.document.write(`
+      <html>
+        <head>
+          <title>${report.title || 'Report'} - WorkZen HRMS</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; padding: 20px; color: #000; background: #fff; }
+            .report-container { max-width: 900px; margin: 0 auto; }
+            .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #005eb8; padding-bottom: 20px; }
+            .company-logo { font-size: 28px; font-weight: bold; color: #005eb8; margin-bottom: 10px; }
+            .report-title { font-size: 22px; font-weight: bold; color: #00a8e8; margin: 15px 0; }
+            .report-info { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 25px 0; background: #f5f5f5; padding: 15px; border-radius: 8px; }
+            .info-item { padding: 8px 0; }
+            .info-label { font-size: 13px; color: #666; font-weight: 600; }
+            .info-value { font-size: 14px; color: #000; margin-top: 3px; }
+            .section { margin: 25px 0; }
+            .section-title { background: #005eb8; color: white; padding: 10px 15px; font-weight: bold; margin-bottom: 15px; border-radius: 5px; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+            th, td { border: 1px solid #ddd; padding: 10px 12px; text-align: left; }
+            th { background: #e8f4f8; font-weight: 600; font-size: 13px; color: #005eb8; }
+            td { font-size: 13px; }
+            .status-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+            .status-ready { background: #d1fae5; color: #065f46; }
+            .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #ddd; font-size: 11px; color: #666; text-align: center; }
+            @media print { 
+              body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="report-container">
+            <div class="header">
+              <div class="company-logo">WorkZen HRMS</div>
+              <div class="report-title">${report.title || 'Report'}</div>
+            </div>
+
+            <div class="report-info">
+              <div class="info-item">
+                <div class="info-label">Report Type:</div>
+                <div class="info-value">${report.type || 'N/A'}</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Generated On:</div>
+                <div class="info-value">${report.date || new Date().toLocaleString()}</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Status:</div>
+                <div class="info-value">
+                  <span class="status-badge status-ready">${report.status || 'Ready'}</span>
+                </div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Report ID:</div>
+                <div class="info-value">${report.id || 'N/A'}</div>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">Report Summary</div>
+              <div style="padding: 15px; background: #f9fafb; border-radius: 5px;">
+                <p style="font-size: 14px; line-height: 1.8;">
+                  This ${report.title || 'report'} contains comprehensive data analysis for the selected period. 
+                  The information presented below has been generated from the WorkZen HRMS database 
+                  and reflects the current state of records as of the generation date.
+                </p>
+              </div>
+            </div>
+
+            <div class="section">
+              <div class="section-title">Report Details</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Attribute</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Report ID</td>
+                    <td>${report.id || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td>Report Title</td>
+                    <td>${report.title || 'Unnamed Report'}</td>
+                  </tr>
+                  <tr>
+                    <td>Report Type</td>
+                    <td>${report.type || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td>Status</td>
+                    <td>${report.status || 'Ready'}</td>
+                  </tr>
+                  <tr>
+                    <td>Generated On</td>
+                    <td>${report.date || new Date().toLocaleString()}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="footer">
+              <p><strong>WorkZen HRMS</strong> - Human Resource Management System</p>
+              <p>This is a computer-generated report. No signature required.</p>
+              <p>Downloaded on: ${new Date().toLocaleString()}</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+    
+    WindowPrint.document.close();
+    WindowPrint.focus();
+    
+    setTimeout(() => {
+      WindowPrint.print();
+      showToast('Report PDF opened for printing', 'success');
+    }, 250);
+  };
+
+  // Export report as CSV
+  const handleExportCSV = (report) => {
+    if (!report) {
+      showToast('Report data not available', 'error');
+      return;
+    }
+
+    // Create CSV content
+    const csvRows = [];
+    
+    // Add header
+    csvRows.push('WorkZen HRMS - Report Export');
+    csvRows.push('');
+    csvRows.push(`Report Title,${report.title || 'Unnamed Report'}`);
+    csvRows.push(`Report Type,${report.type || 'N/A'}`);
+    csvRows.push(`Generated On,${report.date || new Date().toLocaleString()}`);
+    csvRows.push(`Status,${report.status || 'Ready'}`);
+    csvRows.push(`Report ID,${report.id || 'N/A'}`);
+    csvRows.push('');
+    csvRows.push('This report was generated from WorkZen HRMS');
+    
+    const csvContent = csvRows.join('\n');
+    
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${report.title || 'report'}_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showToast('CSV file downloaded successfully', 'success');
+  };
+
   // Filtered employees for search
   const filteredPayrolls = payrolls.filter(p =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -540,7 +710,8 @@ function DashboardPayrollOfficer() {
   );
 
   // Use stats from API (fallback to calculated values if stats not loaded)
-  const totalEmployees = stats.totalEmployees || payrolls.length;
+  const totalEmployees = payrolls.filter(p => p.role === 'Employee').length || stats.totalEmployees || 0;
+  const activeToday = payrolls.filter(p => (p.role === 'Employee') && (p.isActive !== false && p.status !== 'inactive')).length;
   const payrunsCompleted = stats.payruns || payrolls.filter(p => p.status === 'processed' || p.status === 'paid').length;
   const pendingLeaveApprovals = stats.pendingLeaves || leaves.filter(l => l.status === 'pending').length;
   const currentMonthPayroll = stats.currentMonthPayroll || payrolls.reduce((sum, p) => sum + p.netPay, 0);
@@ -603,11 +774,11 @@ function DashboardPayrollOfficer() {
         className="relative z-10 w-64 bg-gray-900/50 backdrop-blur-xl border-r border-gray-800 flex flex-col"
       >
         {/* Logo */}
-        <div className="p-6 border-b border-gray-800">
+        <div className="p-6 border-b border-gray-800 flex items-center gap-2">
           <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
             WorkZen
           </h1>
-          <p className="text-xs text-gray-400 mt-1">Payroll Officer</p>
+          <p className="text-sm text-gray-400">Payroll Officer</p>
         </div>
 
         {/* Menu Items */}
@@ -731,6 +902,36 @@ function DashboardPayrollOfficer() {
 
         {/* DASHBOARD CONTENT */}
         <main className="flex-1 overflow-y-auto p-6">
+          {/* Currently Logged In User Card */}
+          {user && (
+            <div className="mb-8 bg-gradient-to-r from-primary/20 to-accent/20 border border-primary/30 rounded-xl p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-2xl">
+                    {(user.firstName || user.name || 'P').charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400 uppercase tracking-widest">Currently Logged In</p>
+                    <h3 className="text-xl font-bold text-white">
+                      {user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.name}
+                    </h3>
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-semibold">
+                        {user.role || 'Payroll Officer'}
+                      </span>
+                      <span className="text-sm text-gray-400">{user.email}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-400">Employee ID</p>
+                  <p className="text-lg font-semibold text-white">{user.userId || user.employeeId || 'N/A'}</p>
+                  <p className="text-sm text-gray-400 mt-2">{user.department || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* KPI Widgets */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <motion.div
@@ -1139,6 +1340,7 @@ function DashboardPayrollOfficer() {
                             {report.status}
                           </span>
                           <motion.button
+                            onClick={() => handleExportPDF(report)}
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             className="px-3 py-1.5 bg-primary hover:bg-blue-600 text-white rounded-lg text-sm font-semibold transition-all flex items-center gap-1"
@@ -1147,6 +1349,7 @@ function DashboardPayrollOfficer() {
                             Export PDF
                           </motion.button>
                           <motion.button
+                            onClick={() => handleExportCSV(report)}
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-semibold transition-all flex items-center gap-1"

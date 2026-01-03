@@ -72,10 +72,20 @@ const attendanceSchema = new mongoose.Schema({
     min: [0, 'Work hours cannot be negative']
   },
 
+  workHoursFormatted: {
+    type: String,
+    default: '00:00:00'
+  },
+
   overtimeHours: {
     type: Number,
     default: 0,
     min: [0, 'Overtime hours cannot be negative']
+  },
+
+  overtimeHoursFormatted: {
+    type: String,
+    default: '00:00:00'
   },
 
   breakTime: {
@@ -179,6 +189,19 @@ attendanceSchema.pre('save', function(next) {
     // Calculate overtime (assuming 8 hours is standard)
     const standardHours = 8;
     this.overtimeHours = Math.max(0, this.workHours - standardHours);
+
+    // Helper function to convert decimal hours to HH:MM:SS
+    const formatHours = (hours) => {
+      if (!hours || hours <= 0) return '00:00:00';
+      const h = Math.floor(hours);
+      const m = Math.floor((hours - h) * 60);
+      const s = Math.floor(((hours - h) * 60 - m) * 60);
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    };
+
+    // Store formatted time strings
+    this.workHoursFormatted = formatHours(this.workHours);
+    this.overtimeHoursFormatted = formatHours(this.overtimeHours);
   }
 
   next();

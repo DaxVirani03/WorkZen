@@ -549,8 +549,8 @@ function DashboardHROfficer() {
   );
 
   // Calculate KPIs
-  const totalEmployees = employees.length;
-  const activeToday = employees.filter(e => e.isActive !== false && e.status !== 'inactive').length;
+  const totalEmployees = employees.filter(emp => emp.role === 'Employee').length;
+  const activeToday = employees.filter(e => (e.role === 'Employee' || e.role === 'employee') && e.isActive !== false && e.status !== 'inactive').length;
   const pendingLeaves = leaves.filter(l => (l.status || '').toLowerCase() === 'pending').length;
   const attendanceCompliance = attendance.length > 0 
     ? Math.round((attendance.reduce((acc, r) => acc + (r.presentCount || 0), 0) / Math.max(1, attendance.reduce((acc, r) => acc + (r.totalCount || 1), 0))) * 100)
@@ -586,9 +586,9 @@ function DashboardHROfficer() {
         animate={{ x: 0, opacity: 1 }}
         className="w-64 bg-gray-900/50 backdrop-blur-xl border-r border-gray-800 flex flex-col"
       >
-        <div className="p-6 border-b border-gray-800">
-          <h2 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">WorkZen</h2>
-          <p className="text-xs text-gray-400 mt-1">HR Officer</p>
+        <div className="p-6 border-b border-gray-800 flex items-center gap-2">
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">WorkZen</h2>
+          <p className="text-sm text-gray-400">HR Officer</p>
         </div>
 
         <nav className="flex-1 p-4 space-y-2">
@@ -698,6 +698,36 @@ function DashboardHROfficer() {
           </div>
 
           <div className="relative z-10 max-w-7xl mx-auto">
+            {/* ==================== LOGGED IN USER CARD ==================== */}
+            {user && (
+              <div className="mb-8 bg-gradient-to-r from-primary/20 to-accent/20 border border-primary/30 rounded-xl p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white font-bold text-2xl">
+                      {(user.firstName || user.name || 'H').charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase tracking-widest">Currently Logged In</p>
+                      <h3 className="text-xl font-bold text-white">
+                        {user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.name}
+                      </h3>
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className="px-3 py-1 bg-blue-500/20 text-blue-400 rounded-full text-xs font-semibold">
+                          {user.role || 'HR Officer'}
+                        </span>
+                        <span className="text-sm text-gray-400">{user.email}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-gray-400">Employee ID</p>
+                    <p className="text-lg font-semibold text-white">{user.userId || user.employeeId || 'N/A'}</p>
+                    <p className="text-sm text-gray-400 mt-2">{user.department || 'N/A'}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ==================== KPI WIDGETS ==================== */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">

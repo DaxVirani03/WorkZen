@@ -25,6 +25,19 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 function DashboardEmployee() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+
+  // Helper function to convert decimal hours to HH:MM:SS format
+  // Prefers database-stored formatted time if available
+  const formatWorkHours = (hours, formattedTime) => {
+    // Use database formatted time if available
+    if (formattedTime && formattedTime !== '00:00:00') return formattedTime;
+    // Otherwise calculate from decimal hours
+    if (!hours || hours <= 0) return '00:00:00';
+    const h = Math.floor(hours);
+    const m = Math.floor((hours - h) * 60);
+    const s = Math.floor(((hours - h) * 60 - m) * 60);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
   const [activeMenu, setActiveMenu] = useState('Dashboard');
   const [searchQuery, setSearchQuery] = useState('');
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -652,9 +665,9 @@ function DashboardEmployee() {
     <div className="min-h-screen bg-black flex">
       {/* Sidebar */}
       <motion.aside initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="w-64 bg-gray-900/50 backdrop-blur-xl border-r border-gray-800 flex flex-col">
-        <div className="p-6 border-b border-gray-800">
-          <h2 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">WorkZen</h2>
-          <p className="text-xs text-gray-400 mt-1">Employee</p>
+        <div className="p-6 border-b border-gray-800 flex items-center gap-2">
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">WorkZen</h2>
+          <p className="text-sm text-gray-400">Employee</p>
         </div>
         <nav className="flex-1 p-4 space-y-2">
           <motion.button onClick={() => setActiveMenu('Dashboard')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Dashboard' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Clock className="w-5 h-5" /><span className="font-medium">Dashboard</span></motion.button>
@@ -753,7 +766,7 @@ function DashboardEmployee() {
                               )}
                               {todayAttendance.workHours && (
                                 <p className="text-primary font-semibold mt-1">
-                                  Work Hours: {todayAttendance.workHours.toFixed(2)}h
+                                  Work Hours: {formatWorkHours(todayAttendance.workHours, todayAttendance.workHoursFormatted)}
                                 </p>
                               )}
                             </div>
@@ -824,7 +837,7 @@ function DashboardEmployee() {
                                   <td className="py-3">{record.date || `Day ${record.day}`}</td>
                                   <td className="py-3">{record.timeIn || record.checkIn?.time ? new Date(record.checkIn?.time || record.timeIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</td>
                                   <td className="py-3">{record.timeOut || record.checkOut?.time ? new Date(record.checkOut?.time || record.timeOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</td>
-                                  <td className="py-3">{record.workHours ? `${record.workHours.toFixed(2)}h` : 'N/A'}</td>
+                                  <td className="py-3">{record.workHours ? formatWorkHours(record.workHours, record.workHoursFormatted) : 'N/A'}</td>
                                   <td className="py-3">
                                     <span className={`px-2 py-1 rounded text-xs ${
                                       record.status === 'present' ? 'bg-green-500/20 text-green-400' :
