@@ -542,19 +542,36 @@ function DashboardHROfficer() {
     setTimeout(() => setToast({ show: false, message: '', type: 'success' }), 3000);
   }
 
-  const filteredEmployees = employees.filter(emp => 
-    emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    emp.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (emp.department || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // HR can only see Employee and Payroll Officer profiles
+  const filteredEmployees = employees
+    .filter(emp => emp.role === 'Employee' || emp.role === 'Payroll Officer')
+    .filter(emp =>
+      emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      emp.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (emp.department || '').toLowerCase().includes(searchQuery.toLowerCase())
+    );
 
   // Calculate KPIs
   const totalEmployees = employees.filter(emp => emp.role === 'Employee').length;
   const activeToday = employees.filter(e => (e.role === 'Employee' || e.role === 'employee') && e.isActive !== false && e.status !== 'inactive').length;
   const pendingLeaves = leaves.filter(l => (l.status || '').toLowerCase() === 'pending').length;
-  const attendanceCompliance = attendance.length > 0 
-    ? Math.round((attendance.reduce((acc, r) => acc + (r.presentCount || 0), 0) / Math.max(1, attendance.reduce((acc, r) => acc + (r.totalCount || 1), 0))) * 100)
-    : 0;
+  // Calculate attendance rate for the overall month
+  let attendanceCompliance = 0;
+  if (attendance.length > 0) {
+    // Get current month and year
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    // Filter attendance records for current month
+    const monthAttendance = attendance.filter(r => {
+      const date = new Date(r.date);
+      return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+    });
+    // Calculate total present and total possible days
+    const present = monthAttendance.reduce((acc, r) => acc + (r.presentCount || 0), 0);
+    const total = monthAttendance.reduce((acc, r) => acc + (r.totalCount || 1), 0);
+    attendanceCompliance = total > 0 ? Math.round((present / total) * 100) : 0;
+  }
 
   const chartOptions = {
     responsive: true,

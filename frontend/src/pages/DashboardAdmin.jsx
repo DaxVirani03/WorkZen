@@ -2499,38 +2499,14 @@ function DashboardAdmin() {
                     <div className="flex gap-3 pt-4">
                       <button
                         onClick={async () => {
-                          setMarkingCheckIn(true);
-                          try {
-                            const response = await fetch(`http://localhost:5000/api/attendance/simple-mark`, {
-                              method: 'POST',
-                              headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${localStorage.getItem('workzen_token')}`
-                              },
-                              body: JSON.stringify({
-                                userId: selectedUser._id,
-                                date: attendanceDate,
-                                status: 'present'
-                              })
-                            });
-                            const data = await response.json();
-                            if (data.success) {
-                              showToast(`✓ ${selectedUser.name} marked as PRESENT`, 'success');
-                              setTimeout(() => {
-                                fetchDashboardData();
-                                setShowMarkAttendance(false);
-                                setSelectedUser(null);
-                                setAttendanceDate(new Date().toISOString().split('T')[0]);
-                              }, 500);
-                            } else {
-                              showToast(data.message || 'Failed to mark attendance', 'error');
-                            }
-                          } catch (error) {
-                            console.error('Error:', error);
-                            showToast('Failed to mark attendance', 'error');
-                          } finally {
-                            setMarkingCheckIn(false);
-                          }
+                          await handleMarkCheckIn();
+                          // If successful, close modal and refresh data
+                          setTimeout(() => {
+                            fetchDashboardData();
+                            setShowMarkAttendance(false);
+                            setSelectedUser(null);
+                            setAttendanceDate(new Date().toISOString().split('T')[0]);
+                          }, 500);
                         }}
                         disabled={markingCheckIn || markingCheckOut}
                         className="flex-1 px-4 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg transition-all disabled:opacity-50"
@@ -2540,44 +2516,21 @@ function DashboardAdmin() {
                       
                       <button
                         onClick={async () => {
-                          setMarkingCheckOut(true);
-                          try {
-                            const response = await fetch(`http://localhost:5000/api/attendance/simple-mark`, {
-                              method: 'POST',
-                              headers: {
-                                'Content-Type': 'application/json',
-                                'Authorization': `Bearer ${localStorage.getItem('workzen_token')}`
-                              },
-                              body: JSON.stringify({
-                                userId: selectedUser._id,
-                                date: attendanceDate,
-                                status: 'absent'
-                              })
-                            });
-                            const data = await response.json();
-                            if (data.success) {
-                              showToast(`✓ ${selectedUser.name} marked as ABSENT`, 'success');
-                              setTimeout(() => {
-                                fetchDashboardData();
-                                setShowMarkAttendance(false);
-                                setSelectedUser(null);
-                                setAttendanceDate(new Date().toISOString().split('T')[0]);
-                              }, 500);
-                            } else {
-                              showToast(data.message || 'Failed to mark attendance', 'error');
-                            }
-                          } catch (error) {
-                            console.error('Error:', error);
-                            showToast('Failed to mark attendance', 'error');
-                          } finally {
-                            setMarkingCheckOut(false);
-                          }
+                          await handleMarkAbsent();
+                          setTimeout(() => {
+                            fetchDashboardData();
+                            setShowMarkAttendance(false);
+                            setSelectedUser(null);
+                            setAttendanceDate(new Date().toISOString().split('T')[0]);
+                          }, 500);
                         }}
                         disabled={markingCheckOut || markingCheckIn}
                         className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-lg transition-all disabled:opacity-50"
                       >
                         {markingCheckOut ? 'Marking...' : '✗ Mark as ABSENT'}
                       </button>
+
+
                     </div>
 
                     <button

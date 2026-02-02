@@ -188,17 +188,24 @@ function DashboardEmployee() {
       const attendanceRecords = data.data?.attendance || data.attendance || [];
       
       if (res.ok && attendanceRecords.length > 0) {
-        const records = attendanceRecords.map(a => ({
-          ...a,
-          date: a.date ? new Date(a.date).toISOString().split('T')[0] : null,
-          day: new Date(a.date).getDate(),
-          present: a.status === 'present' || a.status === 'late' ? 1 : 0,
-          timeIn: a.checkIn?.time ? new Date(a.checkIn.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null,
-          timeOut: a.checkOut?.time ? new Date(a.checkOut.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null,
-          workHours: a.workHours || 0,
-          status: a.status
-        }));
-        
+        const records = attendanceRecords.map(a => {
+          // Always use ISO date string (YYYY-MM-DD) for all date fields
+          let isoDate = null;
+          if (a.date) {
+            const d = new Date(a.date);
+            isoDate = d.toISOString().split('T')[0];
+          }
+          return {
+            ...a,
+            date: isoDate,
+            day: isoDate ? Number(isoDate.split('-')[2]) : null,
+            present: a.status === 'present' || a.status === 'late' ? 1 : 0,
+            timeIn: a.checkIn?.time ? new Date(a.checkIn.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null,
+            timeOut: a.checkOut?.time ? new Date(a.checkOut.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null,
+            workHours: a.workHours || 0,
+            status: a.status
+          };
+        });
         setAttendance(records);
         console.log(`✅ Loaded ${records.length} attendance records`);
       } else {
@@ -468,10 +475,11 @@ function DashboardEmployee() {
 
       console.log('📊 Fetching today\'s attendance for user:', userId);
       
-      const today = new Date().toISOString().split('T')[0];
-      console.log('📅 Today\'s date:', today);
+      // Always use ISO date string for today
+      const todayISO = new Date().toISOString().split('T')[0];
+      console.log('📅 Today\'s date:', todayISO);
       
-      const url = `http://localhost:5000/api/attendance?employeeId=${userId}&startDate=${today}&endDate=${today}&limit=10`;
+      const url = `http://localhost:5000/api/attendance?employeeId=${userId}&startDate=${todayISO}&endDate=${todayISO}&limit=10`;
       console.log('🔗 Fetching from URL:', url);
       
       const res = await fetch(url, {
@@ -530,10 +538,13 @@ function DashboardEmployee() {
         }
       }
 
+      // Always use ISO date string for today
+      const todayISO = new Date().toISOString().split('T')[0];
       const payload = {
         employeeId: userId,
         location: location,
-        method: 'web'
+        method: 'web',
+        date: todayISO // Ensure date is always sent as YYYY-MM-DD
       };
 
       console.log('📤 Sending check-in payload:', payload);
@@ -607,8 +618,11 @@ function DashboardEmployee() {
         }
       }
 
+      // Always use ISO date string for today
+      const todayISO = new Date().toISOString().split('T')[0];
       const payload = {
         employeeId: user?._id || user?.id,
+        date: todayISO, // Ensure date is always sent as YYYY-MM-DD
         checkOut: {
           time: new Date().toISOString(),
           location: location,
@@ -878,7 +892,7 @@ function DashboardEmployee() {
                             onChange={(e) => setSelectedYear(Number(e.target.value))}
                             className="bg-gray-800 text-white px-3 py-1 rounded border border-gray-700"
                           >
-                            {[2023, 2024, 2025].map(y => (
+                            {[2023, 2024, 2025, 2026, 2027, 2028].map(y => (
                               <option key={y} value={y}>{y}</option>
                             ))}
                           </select>
@@ -888,23 +902,47 @@ function DashboardEmployee() {
                         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                           <div key={day} className="text-center text-gray-400 font-semibold text-sm py-2">{day}</div>
                         ))}
-                        {Array.from({ length: new Date(selectedYear, selectedMonth + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
-                          const dateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                          const record = attendance.find(a => a.date === dateStr);
-                          return (
-                            <div 
-                              key={day} 
-                              className={`aspect-square flex items-center justify-center rounded-lg border ${
-                                record?.status === 'present' || record?.present ? 'bg-green-500/20 border-green-500/50 text-green-400' :
-                                record?.status === 'late' ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400' :
-                                record?.status === 'absent' || (record && !record.present) ? 'bg-red-500/20 border-red-500/50 text-red-400' :
-                                'bg-gray-800 border-gray-700 text-gray-400'
-                              }`}
-                            >
-                              {day}
-                            </div>
-                          );
-                        })}
+                        {(() => {
+                          // Filter attendance for selected month/year
+                          const filteredAttendance = attendance.filter(a => {
+                            if (!a.date) return false;
+                            const d = new Date(a.date);
+                            return d.getFullYear() === selectedYear && d.getMonth() === selectedMonth;
+                          });
+                          return Array.from({ length: new Date(selectedYear, selectedMonth + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
+                            const dateStr = new Date(selectedYear, selectedMonth, day).toLocaleDateString('en-CA');
+                            const record = filteredAttendance.find(a => a.date === dateStr);
+                            const today = new Date();
+                            const cellDate = new Date(selectedYear, selectedMonth, day);
+                            let cellClass = 'bg-gray-800 border-gray-700 text-gray-400';
+                            // Only fill for days up to today
+                            if (
+                              cellDate < new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
+                            ) {
+                              if (record) {
+                                if (record.status === 'present' || record.present) {
+                                  cellClass = 'bg-green-500/20 border-green-500/50 text-green-400';
+                                } else if (record.status === 'late') {
+                                  cellClass = 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400';
+                                } else if (record.status === 'absent' || (!record.present && record.status !== 'late')) {
+                                  cellClass = 'bg-red-500/20 border-red-500/50 text-red-400';
+                                }
+                              } else {
+                                // No record for this day, mark as absent
+                                cellClass = 'bg-red-500/20 border-red-500/50 text-red-400';
+                              }
+                            }
+                            // For future days, keep as blank/gray
+                            return (
+                              <div 
+                                key={day} 
+                                className={`aspect-square flex items-center justify-center rounded-lg border ${cellClass}`}
+                              >
+                                {day}
+                              </div>
+                            );
+                          });
+                        })()}
                       </div>
                       <div className="mt-4 flex gap-4 text-xs text-gray-400">
                         <div className="flex items-center gap-2">
