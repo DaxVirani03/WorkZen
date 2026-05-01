@@ -46,10 +46,6 @@ WorkZen empowers organizations to:
 - **Next.js 15** - React framework with App Router
 - **Tailwind CSS** - Utility-first CSS framework
 - **Framer Motion** - Animation library
-- **GSAP** - Advanced animations
-- **Three.js** - 3D graphics
-- **Chart.js** - Data visualization
-- **Lucide React** - Icon library
 
 ### Backend
 - **Node.js** - JavaScript runtime
@@ -173,13 +169,6 @@ WorkZen HRMS includes a comprehensive authentication system with role-based dash
 - Navigate from navbar avatar dropdown
 - Updates saved to localStorage (TODO: sync with backend)
 
-**Test Credentials:**
-```
-Employee:        employee1@workzen.com / emp123
-HR Officer:      hr1@workzen.com / hr123
-Payroll Officer: payroll1@workzen.com / pay123
-Admin:           admin@workzen.com / admin123
-```
 
 ### Authentication Flow
 
