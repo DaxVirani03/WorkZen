@@ -38,7 +38,7 @@ import { createPortal } from 'react-dom';
 import { 
   Users, Clock, Calendar, Search, UserPlus, LogOut, User as UserIcon, ChevronDown,
   CheckCircle, Plane, AlertCircle, X, Mail, Phone, MapPin, Briefcase,
-  Edit, Save, XCircle, Check, Filter
+  Edit, Save, XCircle, Check, Filter, BarChart3
 } from 'lucide-react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
@@ -74,6 +74,17 @@ function DashboardHROfficer() {
   const [leaves, setLeaves] = useState([]);
   const [processingLeave, setProcessingLeave] = useState(null);
 
+  // Performance management state
+  const [performances, setPerformances] = useState([]);
+  const [showPerformanceModal, setShowPerformanceModal] = useState(false);
+  const [performanceForm, setPerformanceForm] = useState({
+    employee: '', rating: 3, feedback: '', reviewPeriod: '', 
+    strengths: [], areasForImprovement: [], goals: [], recommendation: 'no-change'
+  });
+  const [performanceFilter, setPerformanceFilter] = useState({ employee: 'all', rating: 'all', reviewPeriod: '' });
+  const [performanceStats, setPerformanceStats] = useState({ totalReviews: 0, averageRating: 0, employeesReviewed: 0 });
+  const [savingPerformance, setSavingPerformance] = useState(false);
+
   // Toast notification state
   const [toast, setToast] = useState({ show: false, message: '', type: 'success' });
 
@@ -97,6 +108,10 @@ function DashboardHROfficer() {
       await fetchAttendance();
       await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay
       await fetchLeaves();
+      await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay
+      await fetchPerformance();
+      await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay
+      await fetchPerformanceStats();
     };
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -279,7 +294,11 @@ function DashboardHROfficer() {
   async function fetchLeaves() {
     try {
       console.log('🏖️ HR - Fetching leaves from API...');
-      const res = await fetchWithRetry('http://localhost:5000/api/leaves');
+      const res = await fetchWithRetry('http://localhost:5000/api/leaves', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('workzen_token')}`
+        }
+      });
       if (!res.ok) throw new Error(`Failed to fetch leaves: ${res.status}`);
       const data = await res.json();
       console.log('✅ HR - Leaves loaded:', data);
@@ -339,6 +358,116 @@ function DashboardHROfficer() {
         },
       ],
     });
+  }
+
+  // ==================== PERFORMANCE MANAGEMENT ====================
+
+  async function fetchPerformance() {
+    try {
+      console.log('📊 HR - Fetching performance reviews...');
+      const queryParams = new URLSearchParams({
+        limit: 50,
+        ...(performanceFilter.employee !== 'all' && { employeeId: performanceFilter.employee }),
+        ...(performanceFilter.rating !== 'all' && { rating: performanceFilter.rating }),
+        ...(performanceFilter.reviewPeriod && { reviewPeriod: performanceFilter.reviewPeriod })
+      });
+
+      const res = await fetchWithRetry(`http://localhost:5000/api/performance?${queryParams}`);
+      if (!res.ok) throw new Error(`Failed to fetch performance: ${res.status}`);
+      const data = await res.json();
+
+      console.log('✅ HR - Performance records loaded:', data);
+      setPerformances(data.performances || []);
+    } catch (err) {
+      console.error('❌ HR fetchPerformance error:', err);
+      showToast('Failed to load performance records', 'error');
+      setPerformances([]);
+    }
+  }
+
+  async function fetchPerformanceStats() {
+    try {
+      console.log('📈 HR - Fetching performance stats...');
+      const res = await fetchWithRetry('http://localhost:5000/api/performance/stats');
+      if (!res.ok) throw new Error(`Failed to fetch stats: ${res.status}`);
+      const data = await res.json();
+
+      console.log('✅ HR - Performance stats loaded:', data.stats);
+      setPerformanceStats(data.stats || { totalReviews: 0, averageRating: 0, employeesReviewed: 0 });
+    } catch (err) {
+      console.error('❌ HR fetchPerformanceStats error:', err);
+      setPerformanceStats({ totalReviews: 0, averageRating: 0, employeesReviewed: 0 });
+    }
+  }
+
+  async function savePerformance() {
+    try {
+      setSavingPerformance(true);
+
+      if (!performanceForm.employee || !performanceForm.rating || !performanceForm.reviewPeriod) {
+        showToast('Please fill all required fields', 'error');
+        return;
+      }
+
+      const payload = {
+        employee: performanceForm.employee,
+        reviewer: user?._id || user?.id,
+        rating: performanceForm.rating,
+        feedback: performanceForm.feedback,
+        reviewPeriod: performanceForm.reviewPeriod,
+        strengths: performanceForm.strengths,
+        areasForImprovement: performanceForm.areasForImprovement,
+        goals: performanceForm.goals,
+        recommendation: performanceForm.recommendation
+      };
+
+      const res = await fetchWithRetry('http://localhost:5000/api/performance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('workzen_token')}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) throw new Error('Failed to save performance review');
+      
+      showToast('Performance review saved successfully', 'success');
+      setShowPerformanceModal(false);
+      setPerformanceForm({
+        employee: '', rating: 3, feedback: '', reviewPeriod: '',
+        strengths: [], areasForImprovement: [], goals: [], recommendation: 'no-change'
+      });
+
+      // Refresh performance data
+      await fetchPerformance();
+      await fetchPerformanceStats();
+    } catch (err) {
+      console.error('❌ Save performance error:', err);
+      showToast(err.message || 'Failed to save performance review', 'error');
+    } finally {
+      setSavingPerformance(false);
+    }
+  }
+
+  async function deletePerformance(id) {
+    if (!window.confirm('Are you sure you want to delete this performance review?')) return;
+
+    try {
+      const res = await fetchWithRetry(`http://localhost:5000/api/performance/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('workzen_token')}` }
+      });
+
+      if (!res.ok) throw new Error('Failed to delete performance review');
+
+      showToast('Performance review deleted successfully', 'success');
+      await fetchPerformance();
+      await fetchPerformanceStats();
+    } catch (err) {
+      console.error('❌ Delete performance error:', err);
+      showToast('Failed to delete performance review', 'error');
+    }
   }
 
   // ==================== EMPLOYEE CRUD ====================
@@ -457,18 +586,18 @@ function DashboardHROfficer() {
     
     setProcessingLeave(leave.id || leave._id);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('workzen_token');
       const leaveId = leave._id || leave.id;
       console.log('✅ HR - Approving leave:', leaveId);
       
-      const res = await fetch(`http://localhost:5000/api/leave/${leaveId}/approve`, {
+      const res = await fetch(`http://localhost:5000/api/leaves/${leaveId}`, {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ 
-          status: 'approved',
+          status: 'Approved',
           approvedBy: user?._id || user?.id
         })
       });
@@ -495,18 +624,18 @@ function DashboardHROfficer() {
     
     setProcessingLeave(leave.id || leave._id);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('workzen_token');
       const leaveId = leave._id || leave.id;
       console.log('❌ HR - Rejecting leave:', leaveId);
       
-      const res = await fetch(`http://localhost:5000/api/leave/${leaveId}/reject`, {
+      const res = await fetch(`http://localhost:5000/api/leaves/${leaveId}`, {
         method: 'PUT',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ 
-          status: 'rejected',
+          status: 'Rejected',
           rejectedBy: user?._id || user?.id
         })
       });
@@ -591,6 +720,7 @@ function DashboardHROfficer() {
     { name: 'Employees', icon: Users },
     { name: 'Attendance', icon: Clock },
     { name: 'Time Off', icon: Calendar },
+    { name: 'Performance', icon: BarChart3 },
   ];
 
   if (!user) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
@@ -975,10 +1105,308 @@ function DashboardHROfficer() {
                   </div>
                 </div>
               )}
+
+              {/* PERFORMANCE MANAGEMENT TAB */}
+              {activeMenu === 'Performance' && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-semibold text-white">Performance Management</h2>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => {
+                        setPerformanceForm({ employee: '', rating: 3, feedback: '', reviewPeriod: '', strengths: [], areasForImprovement: [], goals: [], recommendation: 'no-change' });
+                        setShowPerformanceModal(true);
+                        fetchPerformance();
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg transition-all"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      Add Review
+                    </motion.button>
+                  </div>
+
+                  {/* Performance Stats */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
+                      <p className="text-gray-400 text-sm mb-2">Total Reviews</p>
+                      <p className="text-3xl font-bold text-white">{performanceStats.totalReviews}</p>
+                    </div>
+                    <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
+                      <p className="text-gray-400 text-sm mb-2">Average Rating</p>
+                      <p className="text-3xl font-bold text-yellow-400">{performanceStats.averageRating?.toFixed(1) || '0.0'} ⭐</p>
+                    </div>
+                    <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
+                      <p className="text-gray-400 text-sm mb-2">Employees Reviewed</p>
+                      <p className="text-3xl font-bold text-white">{performanceStats.employeesReviewed}</p>
+                    </div>
+                  </div>
+
+                  {/* Filters */}
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-300 mb-2">Filter by Employee</label>
+                        <select
+                          value={performanceFilter.employee}
+                          onChange={(e) => {
+                            setPerformanceFilter({ ...performanceFilter, employee: e.target.value });
+                            setTimeout(() => fetchPerformance(), 100);
+                          }}
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                          <option value="all">All Employees</option>
+                          {employees.map(emp => (
+                            <option key={emp._id || emp.id} value={emp._id || emp.id}>
+                              {emp.name || `${emp.firstName} ${emp.lastName}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-300 mb-2">Filter by Rating</label>
+                        <select
+                          value={performanceFilter.rating}
+                          onChange={(e) => {
+                            setPerformanceFilter({ ...performanceFilter, rating: e.target.value });
+                            setTimeout(() => fetchPerformance(), 100);
+                          }}
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        >
+                          <option value="all">All Ratings</option>
+                          <option value="5">5 Stars ⭐⭐⭐⭐⭐</option>
+                          <option value="4">4 Stars ⭐⭐⭐⭐</option>
+                          <option value="3">3 Stars ⭐⭐⭐</option>
+                          <option value="2">2 Stars ⭐⭐</option>
+                          <option value="1">1 Star ⭐</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-300 mb-2">Review Period</label>
+                        <input
+                          type="text"
+                          placeholder="Q1 2026"
+                          value={performanceFilter.reviewPeriod}
+                          onChange={(e) => {
+                            setPerformanceFilter({ ...performanceFilter, reviewPeriod: e.target.value });
+                            setTimeout(() => fetchPerformance(), 100);
+                          }}
+                          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Performance Table */}
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        <thead className="text-gray-400 border-b border-gray-800">
+                          <tr>
+                            <th className="pb-3">Employee</th>
+                            <th className="pb-3">Rating</th>
+                            <th className="pb-3">Period</th>
+                            <th className="pb-3">Feedback</th>
+                            <th className="pb-3">Recommendation</th>
+                            <th className="pb-3">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-gray-300">
+                          {performances && performances.length > 0 ? (
+                            performances.map((perf) => (
+                              <tr key={perf._id} className="border-b border-gray-800 hover:bg-gray-800/30 transition">
+                                <td className="py-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center text-white text-xs font-bold">
+                                      {(perf.employee?.name || perf.employee?.firstName || '?')[0].toUpperCase()}
+                                    </div>
+                                    <div>
+                                      <p className="text-white font-medium">{perf.employee?.name || `${perf.employee?.firstName} ${perf.employee?.lastName}`}</p>
+                                      <p className="text-xs text-gray-500">{perf.employee?.department}</p>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="py-3">
+                                  <span className="text-yellow-400 font-bold">{'⭐'.repeat(perf.rating)}</span>
+                                </td>
+                                <td className="py-3 text-sm">{perf.reviewPeriod}</td>
+                                <td className="py-3 text-sm truncate max-w-xs">{perf.feedback || 'N/A'}</td>
+                                <td className="py-3 text-sm">
+                                  <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">
+                                    {perf.recommendation?.replace('-', ' ').toUpperCase()}
+                                  </span>
+                                </td>
+                                <td className="py-3">
+                                  <div className="flex items-center gap-2">
+                                    <motion.button
+                                      whileHover={{ scale: 1.1 }}
+                                      whileTap={{ scale: 0.95 }}
+                                      onClick={() => deletePerformance(perf._id)}
+                                      className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition"
+                                      aria-label="Delete review"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </motion.button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan="6" className="py-8 text-center text-gray-400">No performance reviews found</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </motion.div>
           </div>
         </div>
       </div>
+
+      {/* ==================== PERFORMANCE REVIEW MODAL ==================== */}
+      <AnimatePresence>
+        {showPerformanceModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => !savingPerformance && setShowPerformanceModal(false)}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-[90%] max-w-2xl max-h-[90vh] bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl z-50 flex flex-col"
+            >
+              <div className="p-6 border-b border-gray-800 flex items-center justify-between flex-shrink-0">
+                <h3 className="text-xl font-bold text-white">Add Performance Review</h3>
+                <button
+                  onClick={() => !savingPerformance && setShowPerformanceModal(false)}
+                  disabled={savingPerformance}
+                  className="p-2 hover:bg-gray-800 rounded-lg transition-all disabled:opacity-50"
+                  aria-label="Close modal"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="p-6 overflow-y-auto flex-1">
+                <form onSubmit={(e) => { e.preventDefault(); savePerformance(); }} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">
+                        Employee <span className="text-red-400">*</span>
+                      </label>
+                      <select
+                        value={performanceForm.employee}
+                        onChange={(e) => setPerformanceForm({ ...performanceForm, employee: e.target.value })}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        aria-label="Select employee"
+                      >
+                        <option value="">Select Employee</option>
+                        {employees.map(emp => (
+                          <option key={emp._id || emp.id} value={emp._id || emp.id}>
+                            {emp.name || `${emp.firstName} ${emp.lastName}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">
+                        Rating (1-5) <span className="text-red-400">*</span>
+                      </label>
+                      <select
+                        value={performanceForm.rating}
+                        onChange={(e) => setPerformanceForm({ ...performanceForm, rating: Number(e.target.value) })}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        aria-label="Select rating"
+                      >
+                        <option value="1">1 - Poor</option>
+                        <option value="2">2 - Below Average</option>
+                        <option value="3">3 - Average</option>
+                        <option value="4">4 - Good</option>
+                        <option value="5">5 - Excellent</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">
+                        Review Period <span className="text-red-400">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Q1 2026, January 2026, etc."
+                        value={performanceForm.reviewPeriod}
+                        onChange={(e) => setPerformanceForm({ ...performanceForm, reviewPeriod: e.target.value })}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        aria-label="Review period"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm text-gray-300 mb-2">Recommendation</label>
+                      <select
+                        value={performanceForm.recommendation}
+                        onChange={(e) => setPerformanceForm({ ...performanceForm, recommendation: e.target.value })}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                        aria-label="Recommendation"
+                      >
+                        <option value="no-change">No Change</option>
+                        <option value="promotion">Promotion</option>
+                        <option value="salary-increase">Salary Increase</option>
+                        <option value="training-needed">Training Needed</option>
+                        <option value="performance-improvement-plan">Performance Improvement Plan</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-300 mb-2">Feedback</label>
+                    <textarea
+                      value={performanceForm.feedback}
+                      onChange={(e) => setPerformanceForm({ ...performanceForm, feedback: e.target.value })}
+                      placeholder="Detailed feedback and observations..."
+                      rows="4"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      aria-label="Feedback"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      type="submit"
+                      disabled={savingPerformance}
+                      className="flex-1 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      <Save className="w-4 h-4" />
+                      {savingPerformance ? 'Saving...' : 'Save Review'}
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      type="button"
+                      onClick={() => !savingPerformance && setShowPerformanceModal(false)}
+                      disabled={savingPerformance}
+                      className="flex-1 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+                    >
+                      Cancel
+                    </motion.button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ==================== EMPLOYEE CREATE/EDIT MODAL ==================== */}
       <AnimatePresence>

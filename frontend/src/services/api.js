@@ -307,15 +307,15 @@ export const leaveRequestAPI = {
     }),
 
   approve: (id, comments) =>
-    apiRequest(`/leaves/${id}/approve`, {
+    apiRequest(`/leaves/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ comments, status: 'Approved' }),
+      body: JSON.stringify({ status: 'Approved', comments }),
     }),
 
   reject: (id, comments) =>
-    apiRequest(`/leaves/${id}/reject`, {
+    apiRequest(`/leaves/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ comments, status: 'Rejected' }),
+      body: JSON.stringify({ status: 'Rejected', comments }),
     }),
 
   getPending: () => apiRequest('/leaves?status=Pending'),
@@ -365,6 +365,11 @@ export const payrollAPI = {
     return apiRequest(`/payroll/employee/${employeeId}${queryString ? `?${queryString}` : ''}`);
   },
 
+  getMyPayroll: (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiRequest(`/payroll/me${queryString ? `?${queryString}` : ''}`);
+  },
+
   generatePayslip: (id) =>
     apiRequest(`/payroll/${id}/payslip`, {
       method: 'GET',
@@ -379,6 +384,49 @@ export const payrollAPI = {
   getStats: (params = {}) => {
     const queryString = new URLSearchParams(params).toString();
     return apiRequest(`/payroll/stats${queryString ? `?${queryString}` : ''}`);
+  },
+};
+
+// ==================== PERFORMANCE ====================
+
+export const performanceAPI = {
+  getAll: (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiRequest(`/performance${queryString ? `?${queryString}` : ''}`);
+  },
+
+  getById: (id) => apiRequest(`/performance/${id}`),
+
+  create: (performanceData) =>
+    apiRequest('/performance', {
+      method: 'POST',
+      body: JSON.stringify(performanceData),
+    }),
+
+  update: (id, performanceData) =>
+    apiRequest(`/performance/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(performanceData),
+    }),
+
+  delete: (id) =>
+    apiRequest(`/performance/${id}`, {
+      method: 'DELETE',
+    }),
+
+  getByEmployee: (employeeId, params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiRequest(`/performance/employee/${employeeId}${queryString ? `?${queryString}` : ''}`);
+  },
+
+  getStats: (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiRequest(`/performance/stats${queryString ? `?${queryString}` : ''}`);
+  },
+
+  getAnalytics: (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    return apiRequest(`/performance/analytics/department${queryString ? `?${queryString}` : ''}`);
   },
 };
 
@@ -477,6 +525,7 @@ export default {
   leaves: leaveAPI,
   leaveRequests: leaveRequestAPI,
   payroll: payrollAPI,
+  performance: performanceAPI,
   reports: reportAPI,
   settings: settingsAPI,
 };

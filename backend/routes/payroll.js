@@ -1,9 +1,26 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
+const jwt = require('jsonwebtoken');
 const Payroll = require('../models/Payroll');
 const User = require('../models/User'); // Changed from Employee to User
 
 const router = express.Router();
+
+const getAuthUserFromRequest = (req) => {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+
+  if (!token) return null;
+
+  try {
+    return jwt.verify(
+      token,
+      process.env.JWT_SECRET || 'workzen-secret-key-change-in-production'
+    );
+  } catch (error) {
+    return null;
+  }
+};
 
 // @route   POST /api/payroll/generate
 // @desc    Generate payroll for all users/employees
@@ -38,10 +55,12 @@ router.post('/generate', [
     });
 
   } catch (error) {
-    console.error('Generate payroll error:', error);
+    console.error('Generate payroll error:', error.message);
+    console.error('Error details:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error generating payroll'
+      message: 'Server error generating payroll',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -261,6 +280,54 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// @route   GET /api/payroll/me
+// @desc    Get payroll history for currently logged-in user
+// @access  Private
+router.get('/me', async (req, res) => {
+  try {
+    const authUser = getAuthUserFromRequest(req);
+
+    if (!authUser?.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized access. Please login again.'
+      });
+    }
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const payroll = await Payroll.find({ employee: authUser.id })
+      .populate('approvedBy', 'firstName lastName')
+      .populate('processedBy', 'firstName lastName')
+      .sort({ payDate: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Payroll.countDocuments({ employee: authUser.id });
+
+    res.json({
+      success: true,
+      data: {
+        payroll,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get my payroll error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error retrieving payroll history'
+    });
+  }
+});
+
 // @route   GET /api/payroll/:id
 // @desc    Get payroll record by ID
 // @access  Private
@@ -462,6 +529,22 @@ router.put('/:id', async (req, res) => {
 // @access  Private
 router.get('/employee/:employeeId', async (req, res) => {
   try {
+    const authUser = getAuthUserFromRequest(req);
+
+    if (!authUser?.id) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized access. Please login again.'
+      });
+    }
+
+    if (authUser.role === 'Employee' && authUser.id !== req.params.employeeId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You can only view your own payroll records.'
+      });
+    }
+
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;

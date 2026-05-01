@@ -229,7 +229,7 @@ function Profile() {
                   Member Since
                 </label>
                 <div className="px-4 py-3 bg-gray-800/50 border border-gray-800 rounded-lg text-gray-400">
-                  November 2025
+                  January 2026
                 </div>
               </div>
             </div>

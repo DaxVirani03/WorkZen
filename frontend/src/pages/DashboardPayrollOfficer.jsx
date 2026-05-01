@@ -265,19 +265,40 @@ function DashboardPayrollOfficer() {
     setProcessingPayroll(true);
     
     try {
-      // TODO: Replace with real API call
-      // await fetch('/api/payroll/process', { 
-      //   method: 'POST', 
-      //   headers: { 'Authorization': `Bearer ${localStorage.getItem('workzen_token')}` } 
-      // });
+      const today = new Date();
+      const currentMonth = today.getMonth();
+      const currentYear = today.getFullYear();
       
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
+      // Get the first and last day of current month for pay period
+      const payPeriodStart = new Date(currentYear, currentMonth, 1);
+      const payPeriodEnd = new Date(currentYear, currentMonth + 1, 0);
       
-      showToast('Payroll processed successfully!', 'success');
+      const token = localStorage.getItem('workzen_token');
+      const res = await fetch('http://localhost:5000/api/payroll/generate', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          payPeriod: {
+            startDate: payPeriodStart.toISOString().split('T')[0],
+            endDate: payPeriodEnd.toISOString().split('T')[0]
+          },
+          payDate: new Date().toISOString().split('T')[0]
+        })
+      });
+      
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to generate payroll');
+      }
+      
+      showToast('Payroll generated successfully!', 'success');
       fetchPayrolls(); // Refresh data
     } catch (error) {
       console.error('Error processing payroll:', error);
-      showToast('Failed to process payroll', 'error');
+      showToast(`Failed to process payroll: ${error.message}`, 'error');
     } finally {
       setProcessingPayroll(false);
     }
@@ -294,7 +315,11 @@ function DashboardPayrollOfficer() {
     try {
       console.log('📋 Payroll - Fetching leaves from API');
       
-      const response = await fetch('/api/leaves');
+      const response = await fetch('http://localhost:5000/api/leaves', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('workzen_token')}`
+        }
+      });
       
       if (!response.ok) {
         throw new Error(`Failed to fetch leaves: ${response.status} ${response.statusText}`);
@@ -338,46 +363,33 @@ function DashboardPayrollOfficer() {
     setProcessingLeave(leaveId);
     
     try {
-      console.log('✅ Payroll - Approving leave:', leaveId);
+      console.log('✅ Approving leave:', leaveId);
       
-      // Get current user ID from localStorage
-      let approverId = null;
-      const storedUser = localStorage.getItem('workzen_user');
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        approverId = parsedUser._id || parsedUser.id;
-      }
-      
-      if (!approverId) {
-        throw new Error('User not authenticated. Please log in again.');
-      }
-      
-      const res = await fetch(`/api/leaves/${leaveId}`, { 
+      const token = localStorage.getItem('workzen_token');
+      const res = await fetch(`http://localhost:5000/api/leaves/${leaveId}`, { // CORRECTED URL
         method: 'PUT', 
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('workzen_token')}` 
+          'Authorization': `Bearer ${token}` 
         },
         body: JSON.stringify({ 
-          status: 'Approved',
-          approverId: approverId
+          status: 'Approved' // Backend gets approverId from token
         })
       });
       
+      const data = await res.json();
+      
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || `Server returned ${res.status}: ${res.statusText}`);
+        const errorMsg = data.message || `Server returned ${res.status}`;
+        throw new Error(errorMsg);
       }
 
-      const data = await res.json();
-      console.log('✅ Payroll - Leave approved:', data);
-      
-      // Re-fetch leaves to get updated data
-      await fetchLeaves();
-      showToast('Leave request approved', 'success');
+      console.log('✅ Leave approved successfully:', data);
+      await fetchLeaves(); // Refresh data
+      showToast('Leave request approved successfully', 'success');
     } catch (error) {
       console.error('❌ Error approving leave:', error);
-      showToast(error.message || 'Failed to approve leave', 'error');
+      alert(`Failed to approve leave: ${error.message}`); // Use alert to show backend error
     } finally {
       setProcessingLeave(null);
     }
@@ -391,21 +403,9 @@ function DashboardPayrollOfficer() {
     setProcessingLeave(leaveId);
     
     try {
-      console.log('❌ Payroll - Rejecting leave:', leaveId);
+      console.log('❌ Rejecting leave:', leaveId);
       
-      // Get current user ID from localStorage
-      let approverId = null;
-      const storedUser = localStorage.getItem('workzen_user');
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        approverId = parsedUser._id || parsedUser.id;
-      }
-      
-      if (!approverId) {
-        throw new Error('User not authenticated. Please log in again.');
-      }
-      
-      const res = await fetch(`/api/leaves/${leaveId}`, { 
+      const res = await fetch(`http://localhost:5000/api/leaves/${leaveId}`, { // CORRECTED URL
         method: 'PUT', 
         headers: { 
           'Content-Type': 'application/json',
@@ -413,7 +413,6 @@ function DashboardPayrollOfficer() {
         },
         body: JSON.stringify({ 
           status: 'Rejected',
-          approverId: approverId,
           comments: reason || 'No reason provided'
         })
       });
@@ -424,14 +423,12 @@ function DashboardPayrollOfficer() {
       }
 
       const data = await res.json();
-      console.log('❌ Payroll - Leave rejected:', data);
-      
-      // Re-fetch leaves to get updated data
-      await fetchLeaves();
+      console.log('❌ Leave rejected:', data);
+      await fetchLeaves(); // Refresh data
       showToast('Leave request rejected', 'success');
     } catch (error) {
       console.error('❌ Error rejecting leave:', error);
-      showToast(error.message || 'Failed to reject leave', 'error');
+      alert(error.message || 'Failed to reject leave'); // Use alert to show backend error
     } finally {
       setProcessingLeave(null);
     }

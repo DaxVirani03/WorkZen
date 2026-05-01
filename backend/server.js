@@ -49,12 +49,15 @@ app.use('/api/system', require('./routes/system'));
 
 // Use routes with full CRUD operations
 app.use('/api/attendance', require('./routes/attendance'));
-app.use('/api/leave', require('./routes/leaves-simple'));
+// app.use('/api/leave', require('./routes/leaves-simple'));
 app.use('/api/payroll', require('./routes/payroll')); // Changed from payroll-simple to payroll
 app.use('/api/reports', require('./routes/reports'));
 
 // Leave requests (new endpoint for employee time-off)
 app.use('/api/leaves', require('./routes/leaves'));
+
+// Performance Management System
+app.use('/api/performance', require('./routes/performance'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

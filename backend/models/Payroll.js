@@ -149,14 +149,14 @@ const payrollSchema = new mongoose.Schema({
 
   approvedBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Employee'
+    ref: 'User'
   },
 
   approvedAt: Date,
 
   processedBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Employee'
+    ref: 'User'
   },
 
   processedAt: Date,
@@ -170,7 +170,7 @@ const payrollSchema = new mongoose.Schema({
   // Audit Trail
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Employee',
+    ref: 'User',
     required: [true, 'Creator is required']
   },
 
@@ -231,20 +231,30 @@ payrollSchema.pre('save', function(next) {
 
 // Static method to generate payroll for all employees
 payrollSchema.statics.generateMonthlyPayroll = async function(payPeriod, payDate) {
-  const Employee = mongoose.model('Employee');
+  const User = mongoose.model('User');
   const Attendance = mongoose.model('Attendance');
 
-  const employees = await Employee.find({ isActive: true });
+  // Fetch all active employees (Users with Employee role)
+  const employees = await User.find({ 
+    isActive: true,
+    role: { $in: ['Employee', 'HR Officer', 'Payroll Officer'] }
+  });
 
   const payrollRecords = [];
 
   for (const employee of employees) {
+    // Skip if no salary is set
+    if (!employee.salary || employee.salary === 0) {
+      console.warn(`Skipping payroll for employee ${employee._id} - no salary set`);
+      continue;
+    }
+
     // Get attendance summary for the period
     const attendanceSummary = await Attendance.aggregate([
       {
         $match: {
-          employee: employee._id,
-          date: { $gte: payPeriod.startDate, $lte: payPeriod.endDate }
+          employee: new mongoose.Types.ObjectId(employee._id),
+          date: { $gte: new Date(payPeriod.startDate), $lte: new Date(payPeriod.endDate) }
         }
       },
       {
@@ -274,24 +284,32 @@ payrollSchema.statics.generateMonthlyPayroll = async function(payPeriod, payDate
     };
 
     // Calculate overtime pay (assuming 1.5x rate)
-    const overtimeRate = employee.salary / (30 * 8) * 1.5; // Daily rate / 8 hours * 1.5
-    const overtimeAmount = attendance.overtimeHours * overtimeRate;
+    const overtimeRate = (employee.salary || 0) / (30 * 8) * 1.5; // Daily rate / 8 hours * 1.5
+    const overtimeAmount = (attendance.overtimeHours || 0) * overtimeRate;
+
+    // Calculate gross earnings
+    const grossEarnings = (employee.salary || 0) + overtimeAmount;
 
     // Create payroll record
     const payroll = new this({
       employee: employee._id,
-      payPeriod,
-      payDate,
-      basicSalary: employee.salary,
+      payPeriod: {
+        startDate: new Date(payPeriod.startDate),
+        endDate: new Date(payPeriod.endDate)
+      },
+      payDate: new Date(payDate),
+      basicSalary: employee.salary || 0,
       earnings: {
         overtime: {
-          hours: attendance.overtimeHours,
+          hours: attendance.overtimeHours || 0,
           rate: overtimeRate,
           amount: overtimeAmount
         }
       },
+      grossEarnings,
+      netPay: grossEarnings, // For now, net = gross (no deductions calculated)
       attendanceSummary: attendance,
-      createdBy: employee._id // Assuming HR creates it, but using employee for now
+      createdBy: employee._id // Track who the payroll is for
     });
 
     payrollRecords.push(payroll);

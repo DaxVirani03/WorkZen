@@ -5,62 +5,93 @@ const User = require('../models/User');
 /**
  * Create leave request
  * @route POST /api/leaves
- * @access Public (should be protected with auth middleware)
+ * @access Protected
  */
 exports.createLeave = async (req, res) => {
   try {
-    const { userId, type, from, to, reason, email, userEmail } = req.body;
+    // Get user ID from JWT token - the token has userId field
+    const userId = req.user?.userId || req.user?.id || req.user?._id;
     
-    console.log('📝 Creating leave request:', { userId, type, from, to, reason, email });
+    console.log('👤 User from JWT:', req.user);
+    console.log('💼 Extracted userId:', userId);
+    
+    // Validate userId exists
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not authenticated or userId not found in token'
+      });
+    }
+    
+    // Extract fields - handle both old and new field names
+    const { 
+      leaveType, 
+      type,
+      startDate, 
+      from, 
+      endDate, 
+      to, 
+      reason,
+      duration,
+      isEmergency,
+      email, 
+      userEmail 
+    } = req.body;
+    
+    // Map new field names to old ones for LeaveRequest model
+    const finalType = leaveType || type;
+    const finalFrom = startDate || from;
+    const finalTo = endDate || to;
+    
+    console.log('📝 Creating leave request:', { userId, finalType, finalFrom, finalTo, reason });
     
     // Validation
-    if (!type || !from || !to || !reason) {
+    if (!finalType || !finalFrom || !finalTo || !reason) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: type, from, to, reason'
+        message: 'Missing required fields: type/leaveType, from/startDate, to/endDate, reason'
+      });
+    }
+    
+    // Get user from JWT token
+    let user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
       });
     }
     
     // Validate dates
-    const startDate = new Date(from);
-    const endDate = new Date(to);
+    const fromDate = new Date(finalFrom);
+    const toDate = new Date(finalTo);
     
-    if (endDate < startDate) {
+    if (toDate < fromDate) {
       return res.status(400).json({
         success: false,
         message: 'End date must be after or equal to start date'
       });
     }
     
-    // TODO: In production, get userId from req.user.id (JWT token)
-    // For now, if userId is not provided, try to find user by email
-    let finalUserId = userId;
-    let finalEmail = email || userEmail;
-    
-    if (!finalUserId && finalEmail) {
-      const user = await User.findOne({ email: finalEmail });
-      if (user) {
-        finalUserId = user._id;
-      }
-    }
-    
-    // Create leave request
+    // Create leave request - using LeaveRequest model field names
     const leaveData = {
-      userId: finalUserId,
-      type,
-      from: startDate,
-      to: endDate,
+      userId: userId,
+      employee: userId,
+      type: finalType,
+      from: fromDate,
+      to: toDate,
       reason,
       status: 'Pending',
-      email: finalEmail,
-      userEmail: finalEmail
+      email: user.email,
+      userEmail: user.email
     };
     
     const leave = await LeaveRequest.create(leaveData);
     
     // Populate user details
     const populatedLeave = await LeaveRequest.findById(leave._id)
-      .populate('userId', 'name email role department firstName lastName');
+      .populate('userId', 'name email role department firstName lastName')
+      .populate('employee', 'name email role department firstName lastName');
     
     console.log('✅ Leave request created:', populatedLeave._id);
     
@@ -73,6 +104,7 @@ exports.createLeave = async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Create leave error:', error);
+    console.error('Error details:', error.message);
     res.status(500).json({
       success: false,
       message: 'Server error while creating leave request',
@@ -163,108 +195,98 @@ exports.getLeaveById = async (req, res) => {
  * @access Protected (Admin, HR, Payroll)
  */
 exports.updateLeave = async (req, res) => {
+  console.log('🚀 Starting leave update process...');
+  console.log('🔑 User from token:', req.user);
+  
   try {
     const { id } = req.params;
-    const { status, approverId, comments } = req.body;
-    
-    console.log('📝 Updating leave request:', { id, status, approverId, comments });
-    
+    const approverId = req.user?.id || req.user?._id || req.user?.userId;
+
+    console.log(`🆔 Leave ID: ${id}, Approver ID: ${approverId}`);
+
+    if (!approverId) {
+      console.error('❌ Authorization error: Approver ID not found in token.');
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Unauthorized: Approver ID not found in token.' 
+      });
+    }
+
+    const { status, comments } = req.body;
+    console.log(`📝 Update payload: { status: "${status}", comments: "${comments}" }`);
+
     // Validate ObjectId
     if (!id.match(/^[0-9a-fA-F]{24}$/)) {
+      console.error('❌ Invalid ID format:', id);
       return res.status(400).json({
         success: false,
         message: 'Invalid leave request ID format'
       });
     }
-    
+
+    console.log('🔍 Finding leave request by ID...');
     const leave = await LeaveRequest.findById(id);
-    
+
     if (!leave) {
+      console.error('❌ Leave request not found for ID:', id);
       return res.status(404).json({
         success: false,
         message: 'Leave request not found'
       });
     }
-    
+    console.log('✅ Leave request found:', leave);
+
     // Store previous status for audit
     const previousStatus = leave.status;
-    
+    console.log(`⏳ Previous status: ${previousStatus}`);
+
     // Update status
     if (status) {
-      // Validate status
       const validStatuses = ['Pending', 'Approved', 'Rejected', 'Cancelled'];
       if (!validStatuses.includes(status)) {
+        console.error('❌ Invalid status value:', status);
         return res.status(400).json({
           success: false,
           message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
         });
       }
-      
+
       leave.status = status;
-      
-      // Set approval/rejection timestamps
+      leave.approverId = approverId; // Always set the approver from the token
+
       if (status === 'Approved') {
         leave.approvedAt = new Date();
-        if (approverId) leave.approverId = approverId;
-        
-        // Update user's leave balance
-        if (leave.userId) {
-          const days = leave.duration;
-          const leaveTypeKey = leave.type === 'Vacation' ? 'annual' : 
-                               leave.type === 'Sick Leave' ? 'sick' : 
-                               leave.type === 'Personal' ? 'personal' :
-                               'casual';
-          
-          const user = await User.findById(leave.userId);
-          if (user && user.leaveBalance && user.leaveBalance[leaveTypeKey] !== undefined) {
-            const currentBalance = user.leaveBalance[leaveTypeKey];
-            const newBalance = Math.max(0, currentBalance - days);
-            
-            await User.findByIdAndUpdate(leave.userId, {
-              $set: { [`leaveBalance.${leaveTypeKey}`]: newBalance }
-            });
-            
-            console.log(`✅ Deducted ${days} days from user ${user.email}'s ${leaveTypeKey} balance: ${currentBalance} → ${newBalance}`);
-          } else {
-            console.log(`⚠️ User ${leave.userId} not found or leaveBalance not configured`);
-          }
-        }
+        console.log('✅ Status set to Approved. Timestamp and approver ID set.');
       } else if (status === 'Rejected') {
         leave.rejectedAt = new Date();
-        if (approverId) leave.approverId = approverId;
+        console.log('❌ Status set to Rejected. Timestamp and approver ID set.');
+      }
+      if (comments) {
+        leave.comments = comments;
       }
     }
+
+    console.log('💾 Saving updated leave request...');
+    const updatedLeave = await leave.save();
+    console.log('✅ Leave request saved successfully.');
+
+    // Populate user details for the response
+    const populatedLeave = await LeaveRequest.findById(updatedLeave._id)
+      .populate('userId', 'name email')
+      .populate('approverId', 'name email');
     
-    // Update comments
-    if (comments !== undefined) {
-      leave.comments = comments;
-    }
-    
-    // Update approverId even if status not changing
-    if (approverId && !leave.approverId) {
-      leave.approverId = approverId;
-    }
-    
-    await leave.save();
-    
-    const updatedLeave = await LeaveRequest.findById(leave._id)
-      .populate('userId', 'name email role')
-      .populate('employee', 'firstName lastName email')
-      .populate('approverId', 'name email role');
-    
-    console.log(`✅ Leave request updated: ${previousStatus} → ${leave.status} by approver ${approverId}`);
-    
+    console.log('✅ Successfully updated and populated leave request:', populatedLeave._id);
+
     res.json({
       success: true,
-      message: `Leave request ${status?.toLowerCase() || 'updated'} successfully`,
-      leave: updatedLeave,
-      data: updatedLeave
+      message: `Leave request ${status.toLowerCase()} successfully.`,
+      data: populatedLeave
     });
   } catch (error) {
-    console.error('❌ Update leave error:', error);
+    console.error('❌❌❌ CRITICAL ERROR in updateLeave:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error while updating leave request',
+      message: 'Server error during leave update.',
       error: error.message
     });
   }

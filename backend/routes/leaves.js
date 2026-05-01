@@ -8,42 +8,55 @@ const {
   deleteLeave
 } = require('../controllers/leaveRequestController');
 
-// Note: Add auth middleware when available
-// const { protect, authorize } = require('../middleware/auth');
+// Middleware to extract JWT token
+const jwt = require('jsonwebtoken');
+const protect = (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No token provided' });
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'workzen-secret-key-change-in-production');
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(401).json({ success: false, message: 'Invalid token' });
+  }
+};
 
 /**
  * @route   POST /api/leaves
  * @desc    Create a new leave request
- * @access  Public (should be Protected)
+ * @access  Protected
  */
-router.post('/', createLeave);
+router.post('/', protect, createLeave);
 
 /**
  * @route   GET /api/leaves
  * @desc    Get all leave requests (with optional filters)
- * @access  Public (should be Protected)
+ * @access  Protected
  */
-router.get('/', getLeaves);
+router.get('/', protect, getLeaves);
 
 /**
  * @route   GET /api/leaves/:id
  * @desc    Get leave request by ID
- * @access  Public (should be Protected)
+ * @access  Protected
  */
-router.get('/:id', getLeaveById);
+router.get('/:id', protect, getLeaveById);
 
 /**
  * @route   PUT /api/leaves/:id
  * @desc    Update leave request (approve/reject)
- * @access  Protected (Admin, HR Officer, Payroll Officer)
+ * @access  Protected
  */
-router.put('/:id', updateLeave);
+router.put('/:id', protect, updateLeave);
 
 /**
  * @route   DELETE /api/leaves/:id
  * @desc    Delete leave request
- * @access  Protected (Admin or owner)
+ * @access  Protected
  */
-router.delete('/:id', deleteLeave);
+router.delete('/:id', protect, deleteLeave);
 
 module.exports = router;

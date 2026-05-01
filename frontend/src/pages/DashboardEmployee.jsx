@@ -14,7 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Clock, Calendar, Search, UserPlus, LogOut, User as UserIcon, ChevronDown,
-  CheckCircle, AlertCircle, X, Mail, Phone, MapPin
+  CheckCircle, AlertCircle, X, Mail, Phone, MapPin, Wallet, BarChart3, Star
 } from 'lucide-react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 import { Line } from 'react-chartjs-2';
@@ -25,6 +25,13 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 function DashboardEmployee() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+
+  const formatLocalDate = (date = new Date()) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
   // Helper function to convert decimal hours to HH:MM:SS format
   // Prefers database-stored formatted time if available
@@ -88,6 +95,14 @@ function DashboardEmployee() {
   const [attendanceView, setAttendanceView] = useState('daily'); // 'daily' or 'monthly'
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [payrollRecords, setPayrollRecords] = useState([]);
+  const [payrollLoading, setPayrollLoading] = useState(false);
+  const [payrollError, setPayrollError] = useState('');
+
+  // Performance reviews
+  const [performances, setPerformances] = useState([]);
+  const [performanceLoading, setPerformanceLoading] = useState(false);
+  const [performanceError, setPerformanceError] = useState('');
 
   // Time off
   const [showTimeOffModal, setShowTimeOffModal] = useState(false);
@@ -131,6 +146,16 @@ function DashboardEmployee() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  useEffect(() => {
+    if (activeMenu === 'Payroll') {
+      fetchMyPayroll();
+    }
+    if (activeMenu === 'Performance' && user) {
+      fetchMyPerformance();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMenu, user]);
+
   // Fetch directory (uses /api/users)
   async function fetchDirectory() {
     try {
@@ -167,8 +192,8 @@ function DashboardEmployee() {
       console.log('📊 Fetching attendance records for user:', userId);
 
       // Fetch last 30 days of attendance (add high limit to get all records)
-      const endDate = new Date().toISOString().split('T')[0];
-      const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const endDate = formatLocalDate(new Date());
+      const startDate = formatLocalDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
       
       console.log('📅 Date range:', startDate, 'to', endDate);
       
@@ -190,15 +215,15 @@ function DashboardEmployee() {
       if (res.ok && attendanceRecords.length > 0) {
         const records = attendanceRecords.map(a => {
           // Always use ISO date string (YYYY-MM-DD) for all date fields
-          let isoDate = null;
+          let localDate = null;
           if (a.date) {
             const d = new Date(a.date);
-            isoDate = d.toISOString().split('T')[0];
+            localDate = formatLocalDate(d);
           }
           return {
             ...a,
-            date: isoDate,
-            day: isoDate ? Number(isoDate.split('-')[2]) : null,
+            date: localDate,
+            day: localDate ? Number(localDate.split('-')[2]) : null,
             present: a.status === 'present' || a.status === 'late' ? 1 : 0,
             timeIn: a.checkIn?.time ? new Date(a.checkIn.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null,
             timeOut: a.checkOut?.time ? new Date(a.checkOut.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : null,
@@ -235,8 +260,8 @@ function DashboardEmployee() {
       const now = new Date();
       const year = now.getFullYear();
       const month = now.getMonth();
-      const startOfMonth = new Date(year, month, 1).toISOString().split('T')[0];
-      const endOfMonth = new Date(year, month + 1, 0).toISOString().split('T')[0];
+      const startOfMonth = formatLocalDate(new Date(year, month, 1));
+      const endOfMonth = formatLocalDate(new Date(year, month + 1, 0));
 
       // Fetch attendance records for current month
       const attendanceRes = await fetch(`http://localhost:5000/api/attendance?employeeId=${userId}&startDate=${startOfMonth}&endDate=${endOfMonth}&limit=100`, {
@@ -283,15 +308,21 @@ function DashboardEmployee() {
           
           // Count approved leaves in current month for this user
           leavesTaken = allLeaves.filter(leave => {
-            const isApproved = leave.status === 'approved';
-            const isCurrentUser = leave.employee?.email === userEmail || leave.userEmail === userEmail;
-            const leaveStart = new Date(leave.startDate);
-            const leaveEnd = new Date(leave.endDate);
+            // Handle both 'Approved' and 'approved' status values due to model inconsistency
+            const isApproved = leave.status === 'Approved' || leave.status === 'approved';
+            const isCurrentUser = leave.email === userEmail || 
+                                 leave.userEmail === userEmail || 
+                                 leave.userId?.email === userEmail ||
+                                 leave.employee?.email === userEmail;
+            const leaveStart = new Date(leave.startDate || leave.from);
+            const leaveEnd = new Date(leave.endDate || leave.to);
             const monthStart = new Date(startOfMonth);
             const monthEnd = new Date(endOfMonth);
             
             // Check if leave overlaps with current month
             const overlaps = leaveStart <= monthEnd && leaveEnd >= monthStart;
+            
+            console.log('📅 Leave check:', { type: leave.type || leave.leaveType, status: leave.status, isApproved, isCurrentUser, overlaps });
             
             return isApproved && isCurrentUser && overlaps;
           }).length;
@@ -353,8 +384,8 @@ function DashboardEmployee() {
       }).map(l => ({
         id: l._id || l.id,
         type: l.type,
-        from: l.from ? new Date(l.from).toISOString().split('T')[0] : '',
-        to: l.to ? new Date(l.to).toISOString().split('T')[0] : '',
+        from: l.from ? formatLocalDate(new Date(l.from)) : '',
+        to: l.to ? formatLocalDate(new Date(l.to)) : '',
         reason: l.reason,
         status: l.status,
         comments: l.comments,
@@ -376,10 +407,108 @@ function DashboardEmployee() {
     }
   }
 
+  async function fetchMyPayroll() {
+    setPayrollLoading(true);
+    setPayrollError('');
+
+    try {
+      const res = await fetch('http://localhost:5000/api/payroll/me?limit=50', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('workzen_token')}`
+        }
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to fetch payroll records');
+      }
+
+      const records = data.data?.payroll || [];
+      setPayrollRecords(records);
+    } catch (error) {
+      console.error('❌ Fetch payroll error:', error);
+      setPayrollError(error.message || 'Failed to load payroll records');
+      setPayrollRecords([]);
+    } finally {
+      setPayrollLoading(false);
+    }
+  }
+
+  async function fetchMyPerformance() {
+    setPerformanceLoading(true);
+    setPerformanceError('');
+
+    try {
+      // Get user data from localStorage
+      let userId = user?._id || user?.id;
+      
+      // If not available in state, try localStorage
+      if (!userId) {
+        const storedUser = JSON.parse(localStorage.getItem('workzen_user') || '{}');
+        userId = storedUser._id || storedUser.id;
+      }
+
+      const token = localStorage.getItem('workzen_token');
+
+      console.log('👤 Fetching performance for user:', userId);
+      console.log('🔑 Token exists:', !!token);
+
+      if (!userId) {
+        setPerformanceError('User ID not found. Please login again.');
+        setPerformances([]);
+        return;
+      }
+
+      if (!token) {
+        setPerformanceError('Authentication token missing. Please login again.');
+        setPerformances([]);
+        return;
+      }
+
+      const url = `http://localhost:5000/api/performance/employee/${userId}`;
+      console.log('🌐 Fetching from:', url);
+
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('📊 Response status:', res.status);
+      const data = await res.json();
+      console.log('📥 Response data:', data);
+
+      if (!res.ok) {
+        throw new Error(data.message || data.error || `HTTP ${res.status}`);
+      }
+
+      const records = data.performances || [];
+      console.log('✅ Performance records fetched:', records.length);
+      setPerformances(records);
+    } catch (error) {
+      console.error('❌ Fetch performance error:', error);
+      setPerformanceError(`Error: ${error.message || 'Failed to load performance records'}`);
+      setPerformances([]);
+    } finally {
+      setPerformanceLoading(false);
+    }
+  }
+
+  const formatCurrency = (amount) => {
+    const value = Number(amount || 0);
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 2
+    }).format(value);
+  };
+
   function computeKpisFromAttendance(records) {
     const present = records.filter(r => r.present === 1).length;
     const late = records.filter(r => r.timeIn && r.timeIn > '09:15').length;
-    const leavesTaken = leaves.filter(l => l.status === 'Approved').length;
+    const leavesTaken = leaves.filter(l => l.status === 'Approved' || l.status === 'approved').length;
     setKpis({ present, late, leaves: leavesTaken, performance: 88 });
   }
 
@@ -411,7 +540,7 @@ function DashboardEmployee() {
       from: leaveForm.from, 
       to: leaveForm.to, 
       reason: leaveForm.reason, 
-      status: 'Pending', 
+      status: 'pending', 
       email: user?.email,
       userEmail: user?.email,
       createdAt: new Date().toISOString() 
@@ -423,10 +552,21 @@ function DashboardEmployee() {
     try {
       console.log('📤 Submitting leave request:', optimistic);
       
-      const res = await fetch('/api/leaves', { 
+      const token = localStorage.getItem('workzen_token');
+      const res = await fetch('http://localhost:5000/api/leaves', { 
         method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify(optimistic) 
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }, 
+        body: JSON.stringify({
+          leaveType: leaveForm.type,
+          startDate: leaveForm.from,
+          endDate: leaveForm.to,
+          reason: leaveForm.reason,
+          duration: Math.ceil((new Date(leaveForm.to) - new Date(leaveForm.from)) / (1000*60*60*24)) + 1,
+          isEmergency: false
+        })
       });
       
       const data = await res.json();
@@ -438,24 +578,22 @@ function DashboardEmployee() {
       
       // Success - update with real data from server
       setLeaves(prev => prev.map(l => 
-        l.id === optimistic.id ? { ...data.leave, id: data.id || data.leave._id } : l
+        l.id === optimistic.id ? { ...data.leave || data.data, id: data.leave?._id || data.data?._id || data.id } : l
       ));
       
       // Re-fetch to get updated list
       fetchLeaves();
       
       alert('✅ Leave request submitted successfully!');
-      setLeaveForm({ type: 'Vacation', from: '', to: '', reason: '' });
+      setLeaveForm({ type: 'Casual Leave', from: '', to: '', reason: '' });
       
     } catch (err) {
       console.error('❌ Submit leave error:', err);
       
-      // Mark as failed
-      setLeaves(prev => prev.map(l => 
-        l.id === optimistic.id ? { ...l, status: 'Failed' } : l
-      ));
+      // Remove the failed optimistic entry
+      setLeaves(prev => prev.filter(l => l.id !== optimistic.id));
       
-      alert(`Submit failed: ${err.message}. Please try again.`);
+      alert(`❌ Submit failed: ${err.message}. Please check your internet and try again.`);
       
     } finally {
       setSubmittingLeave(false);
@@ -476,7 +614,7 @@ function DashboardEmployee() {
       console.log('📊 Fetching today\'s attendance for user:', userId);
       
       // Always use ISO date string for today
-      const todayISO = new Date().toISOString().split('T')[0];
+      const todayISO = formatLocalDate(new Date());
       console.log('📅 Today\'s date:', todayISO);
       
       const url = `http://localhost:5000/api/attendance?employeeId=${userId}&startDate=${todayISO}&endDate=${todayISO}&limit=10`;
@@ -539,7 +677,7 @@ function DashboardEmployee() {
       }
 
       // Always use ISO date string for today
-      const todayISO = new Date().toISOString().split('T')[0];
+      const todayISO = formatLocalDate(new Date());
       const payload = {
         employeeId: userId,
         location: location,
@@ -619,7 +757,7 @@ function DashboardEmployee() {
       }
 
       // Always use ISO date string for today
-      const todayISO = new Date().toISOString().split('T')[0];
+      const todayISO = formatLocalDate(new Date());
       const payload = {
         employeeId: user?._id || user?.id,
         date: todayISO, // Ensure date is always sent as YYYY-MM-DD
@@ -685,6 +823,8 @@ function DashboardEmployee() {
         </div>
         <nav className="flex-1 p-4 space-y-2">
           <motion.button onClick={() => setActiveMenu('Dashboard')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Dashboard' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Clock className="w-5 h-5" /><span className="font-medium">Dashboard</span></motion.button>
+          <motion.button onClick={() => setActiveMenu('Payroll')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Payroll' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Wallet className="w-5 h-5" /><span className="font-medium">Payroll</span></motion.button>
+          <motion.button onClick={() => setActiveMenu('Performance')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Performance' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><BarChart3 className="w-5 h-5" /><span className="font-medium">Performance</span></motion.button>
           <motion.button onClick={() => setActiveMenu('Time Off')} whileHover={{ x: 4 }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${activeMenu === 'Time Off' ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}><Calendar className="w-5 h-5" /><span className="font-medium">Time Off</span></motion.button>
         </nav>
       </motion.aside>
@@ -910,7 +1050,7 @@ function DashboardEmployee() {
                             return d.getFullYear() === selectedYear && d.getMonth() === selectedMonth;
                           });
                           return Array.from({ length: new Date(selectedYear, selectedMonth + 1, 0).getDate() }, (_, i) => i + 1).map(day => {
-                            const dateStr = new Date(selectedYear, selectedMonth, day).toLocaleDateString('en-CA');
+                            const dateStr = formatLocalDate(new Date(selectedYear, selectedMonth, day));
                             const record = filteredAttendance.find(a => a.date === dateStr);
                             const today = new Date();
                             const cellDate = new Date(selectedYear, selectedMonth, day);
@@ -1026,6 +1166,168 @@ function DashboardEmployee() {
                       </div>
                     </div>
                     <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6"><h3 className="text-white font-semibold mb-4">Apply for Time Off</h3><form onSubmit={submitLeave} className="space-y-3"><label className="block text-sm text-gray-300">Type<select aria-label="Leave type" value={leaveForm.type} onChange={e=>setLeaveForm({...leaveForm,type:e.target.value})} className="w-full mt-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"><option>Vacation</option><option>Sick Leave</option><option>Casual Leave</option></select></label><label className="block text-sm text-gray-300">From<input aria-label="Leave from date" value={leaveForm.from} onChange={e=>setLeaveForm({...leaveForm,from:e.target.value})} type="date" className="w-full mt-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" /></label><label className="block text-sm text-gray-300">To<input aria-label="Leave to date" value={leaveForm.to} onChange={e=>setLeaveForm({...leaveForm,to:e.target.value})} type="date" className="w-full mt-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary" /></label><label className="block text-sm text-gray-300">Reason<textarea aria-label="Leave reason" value={leaveForm.reason} onChange={e=>setLeaveForm({...leaveForm,reason:e.target.value})} className="w-full mt-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"></textarea></label><div className="flex items-center gap-3"><button type="submit" disabled={submittingLeave} className="px-4 py-2 bg-primary text-white rounded-lg">{submittingLeave ? 'Submitting...' : 'Submit'}</button><button type="button" onClick={()=>setLeaveForm({type:'Vacation',from:'',to:'',reason:''})} className="px-4 py-2 bg-gray-800 text-gray-300 rounded-lg">Reset</button></div></form></div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeMenu === 'Payroll' && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+                  <h2 className="text-xl font-semibold text-white mb-6">My Payroll</h2>
+
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
+                    {payrollLoading ? (
+                      <div className="text-gray-400 text-center py-8">Loading payroll records...</div>
+                    ) : payrollError ? (
+                      <div className="text-red-400 text-center py-8">{payrollError}</div>
+                    ) : payrollRecords.length === 0 ? (
+                      <div className="text-gray-400 text-center py-8">No payroll records found.</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead className="text-gray-400 border-b border-gray-800">
+                            <tr>
+                              <th className="pb-3">Pay Period</th>
+                              <th className="pb-3">Pay Date</th>
+                              <th className="pb-3">Gross</th>
+                              <th className="pb-3">Net Pay</th>
+                              <th className="pb-3">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="text-gray-300">
+                            {payrollRecords.map((record) => (
+                              <tr key={record._id} className="border-b border-gray-800">
+                                <td className="py-3">
+                                  {record.payPeriod?.startDate ? new Date(record.payPeriod.startDate).toLocaleDateString() : 'N/A'}
+                                  {' - '}
+                                  {record.payPeriod?.endDate ? new Date(record.payPeriod.endDate).toLocaleDateString() : 'N/A'}
+                                </td>
+                                <td className="py-3">{record.payDate ? new Date(record.payDate).toLocaleDateString() : 'N/A'}</td>
+                                <td className="py-3">{formatCurrency(record.grossEarnings)}</td>
+                                <td className="py-3 text-green-400 font-medium">{formatCurrency(record.netPay)}</td>
+                                <td className="py-3">
+                                  <span className={`px-2 py-1 rounded text-xs ${
+                                    record.paymentStatus === 'paid' ? 'bg-green-500/20 text-green-400' :
+                                    record.paymentStatus === 'processed' ? 'bg-blue-500/20 text-blue-400' :
+                                    'bg-yellow-500/20 text-yellow-400'
+                                  }`}>
+                                    {(record.paymentStatus || record.status || 'pending').toString().toUpperCase()}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {activeMenu === 'Performance' && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+                  <h2 className="text-xl font-semibold text-white mb-6">My Performance Reviews</h2>
+
+                  <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800 rounded-xl p-6">
+                    {performanceLoading ? (
+                      <div className="text-gray-400 text-center py-8">Loading performance reviews...</div>
+                    ) : performanceError ? (
+                      <div className="text-red-400 text-center py-8">{performanceError}</div>
+                    ) : performances.length === 0 ? (
+                      <div className="text-gray-400 text-center py-8">
+                        <div className="text-4xl mb-2">⭐</div>
+                        <div>No performance reviews yet.</div>
+                        <div className="text-sm text-gray-500 mt-1">Your reviews will appear here once your HR Officer submits them.</div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {performances.map((perf) => (
+                          <div key={perf._id} className="p-4 bg-gray-800/50 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors">
+                            <div className="flex items-start justify-between mb-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-white font-semibold">Review by {perf.reviewer?.firstName || perf.reviewer?.name || 'HR Officer'}</span>
+                                  <span className="text-gray-500">•</span>
+                                  <span className="text-sm text-gray-400">{perf.reviewPeriod}</span>
+                                </div>
+                                <span className="text-xs text-gray-500">{perf.date ? new Date(perf.date).toLocaleDateString() : 'N/A'}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star
+                                    key={i}
+                                    className={`w-4 h-4 ${i < Math.round(perf.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-600'}`}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                            
+                            {perf.feedback && (
+                              <div className="mb-3 p-3 bg-gray-700/30 rounded border border-gray-700/50">
+                                <p className="text-sm text-gray-300">{perf.feedback}</p>
+                              </div>
+                            )}
+
+                            {perf.metrics && (
+                              <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
+                                {perf.metrics.quality && (
+                                  <div className="flex items-center justify-between bg-gray-700/20 p-2 rounded">
+                                    <span className="text-gray-400">Quality</span>
+                                    <span className="text-gray-300 font-medium">{perf.metrics.quality}/5</span>
+                                  </div>
+                                )}
+                                {perf.metrics.productivity && (
+                                  <div className="flex items-center justify-between bg-gray-700/20 p-2 rounded">
+                                    <span className="text-gray-400">Productivity</span>
+                                    <span className="text-gray-300 font-medium">{perf.metrics.productivity}/5</span>
+                                  </div>
+                                )}
+                                {perf.metrics.attendance && (
+                                  <div className="flex items-center justify-between bg-gray-700/20 p-2 rounded">
+                                    <span className="text-gray-400">Attendance</span>
+                                    <span className="text-gray-300 font-medium">{perf.metrics.attendance}/5</span>
+                                  </div>
+                                )}
+                                {perf.metrics.teamwork && (
+                                  <div className="flex items-center justify-between bg-gray-700/20 p-2 rounded">
+                                    <span className="text-gray-400">Teamwork</span>
+                                    <span className="text-gray-300 font-medium">{perf.metrics.teamwork}/5</span>
+                                  </div>
+                                )}
+                                {perf.metrics.communication && (
+                                  <div className="flex items-center justify-between bg-gray-700/20 p-2 rounded">
+                                    <span className="text-gray-400">Communication</span>
+                                    <span className="text-gray-300 font-medium">{perf.metrics.communication}/5</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {perf.recommendation && (
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  perf.recommendation === 'Excellent' ? 'bg-green-500/20 text-green-400' :
+                                  perf.recommendation === 'Good' ? 'bg-blue-500/20 text-blue-400' :
+                                  perf.recommendation === 'Satisfactory' ? 'bg-yellow-500/20 text-yellow-400' :
+                                  'bg-red-500/20 text-red-400'
+                                }`}>
+                                  {perf.recommendation}
+                                </span>
+                                {perf.status && (
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    perf.status === 'finalized' ? 'bg-green-500/20 text-green-400' : 
+                                    perf.status === 'reviewed' ? 'bg-blue-500/20 text-blue-400' : 
+                                    perf.status === 'submitted' ? 'bg-yellow-500/20 text-yellow-400' :
+                                    'bg-gray-700/50 text-gray-300'
+                                  }`}>
+                                    {perf.status.charAt(0).toUpperCase() + perf.status.slice(1)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               )}
